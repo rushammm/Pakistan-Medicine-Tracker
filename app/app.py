@@ -948,7 +948,10 @@ def main():
                     st.image(rx_image, caption="Prescription image", width=300)
 
                     # Check for Gemini API key: secrets > env > user input
-                    gemini_key = st.secrets.get("GEMINI_API_KEY", "").strip() or os.environ.get("GEMINI_API_KEY", "").strip()
+                    try:
+                        gemini_key = st.secrets["GEMINI_API_KEY"].strip()
+                    except (KeyError, FileNotFoundError, AttributeError):
+                        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
                     if not gemini_key:
                         gemini_key = st.text_input(
                             "Gemini API Key",
