@@ -1143,18 +1143,10 @@ def main():
                     card_cls = "cart-summary cart-winner" if is_cheapest else "cart-summary"
                     badge = f'<span class="pill pill-green" style="margin-left:8px;">CHEAPEST</span>' if is_cheapest else ""
                     with cart_cols[i]:
-                        st.markdown(f"""
-                        <div class="{card_cls}">
-                            <div class="metric-label">{row['source']}{badge}</div>
-                            <div class="cart-total" style="color:{COLORS['green'] if is_cheapest else '#ffffff'};">
-                                Rs {row['total']:,.0f}
-                            </div>
-                            <div class="metric-sub">
-                                {int(row['available'])} / {int(row['count'])} in stock
-                                {f' &nbsp;|&nbsp; <span class="deal-saving">Save Rs {cart_saving:,.0f}</span>' if is_cheapest and cart_saving > 0 else ''}
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
+                        saving_html = f' &nbsp;|&nbsp; <span class="deal-saving">Save Rs {cart_saving:,.0f}</span>' if is_cheapest and cart_saving > 0 else ''
+                        color = COLORS['green'] if is_cheapest else '#ffffff'
+                        card_html = f'<div class="{card_cls}"><div class="metric-label">{row["source"]}{badge}</div><div class="cart-total" style="color:{color};">Rs {row["total"]:,.0f}</div><div class="metric-sub">{int(row["available"])} / {int(row["count"])} in stock{saving_html}</div></div>'
+                        st.markdown(card_html, unsafe_allow_html=True)
 
                 cart_detail = cart_data[["name", "price_pkr", "availability", "source"]].copy()
                 cart_detail.columns = ["Medicine", "Price (PKR)", "Availability", "Source"]
