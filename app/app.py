@@ -558,9 +558,9 @@ PLOTLY_LAYOUT = dict(
     yaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
     margin=dict(l=10, r=10, t=44, b=10),
     hoverlabel=dict(
-        bgcolor=COLORS["surface2"],
-        bordercolor=COLORS["border"],
-        font_color=COLORS["text"],
+        bgcolor="#1a1a1f",
+        bordercolor="#3f3f46",
+        font_color="#e4e4e7",
     ),
 )
 
