@@ -165,7 +165,7 @@ This project is inspired by and extends research on healthcare accessibility in 
 
 **ICONIP 2024 Published Paper**
 *"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"*
-[Read the paper](https://link.springer.com/conference/iconip)
+[Read the paper](https://arxiv.org/abs/2409.14194)
 
 The Research Insights tab directly implements the paper's framework — using web-scraped pharmaceutical data, anomaly detection (Isolation Forest), accessibility scoring, and affordability analysis to identify and quantify healthcare gaps in Pakistan's medicine supply chain.
 
