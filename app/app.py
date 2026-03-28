@@ -44,20 +44,20 @@ MEDSTORE_SEARCH_URL = "https://medstore.com.pk/catalogsearch/result/?q={query}"
 # ---------------------------------------------------------------------------
 
 COLORS = {
-    "bg":         "#09090b",       # zinc-950
-    "surface":    "#18181b",       # zinc-900
-    "surface2":   "#27272a",       # zinc-800
-    "border":     "#27272a",       # zinc-800
-    "border_l":   "#3f3f46",       # zinc-700
-    "text":       "#d4d4d8",       # zinc-300
+    "bg":         "#0a0a0f",       # deep dark
+    "surface":    "rgba(255,255,255,0.05)",  # glass
+    "surface2":   "rgba(255,255,255,0.08)",  # glass elevated
+    "border":     "rgba(255,255,255,0.08)",  # subtle border
+    "border_l":   "rgba(255,255,255,0.15)",  # hover border
+    "text":       "#e4e4e7",       # zinc-200
     "text_dim":   "#71717a",       # zinc-500
     "accent":     "#fafafa",       # zinc-50
     "accent_dim": "#52525b",       # zinc-600
-    "blue":       "#d4d4d8",       # zinc-300
-    "blue_dim":   "#3f3f46",       # zinc-700
+    "blue":       "#e4e4e7",       # zinc-200
+    "blue_dim":   "rgba(255,255,255,0.06)",
     "blue_light": "#a1a1aa",       # zinc-400
     "green":      "#fafafa",       # zinc-50
-    "green_dim":  "#27272a",       # zinc-800
+    "green_dim":  "rgba(255,255,255,0.04)",
     "green_light":"#a1a1aa",       # zinc-400
 }
 
@@ -82,22 +82,18 @@ st.markdown(f"""
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     }}
 
+    /* ---- Glass mixin ---- */
+    /* Shared glass properties used across cards, hero, sidebar, etc. */
+
     /* Header */
     .hero {{
         background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid {COLORS["border"]};
         border-radius: 16px;
         padding: 2.5rem 2.5rem 2rem;
         margin-bottom: 2rem;
-        position: relative;
-        overflow: hidden;
-    }}
-    .hero::before {{
-        content: '';
-        position: absolute;
-        top: 0; left: 0; right: 0;
-        height: 3px;
-        background: linear-gradient(90deg, {COLORS["border_l"]}, {COLORS["text_dim"]}, {COLORS["border_l"]});
     }}
     .hero h1 {{
         font-size: 1.75rem;
@@ -122,13 +118,16 @@ st.markdown(f"""
     .metric-card {{
         flex: 1;
         background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid {COLORS["border"]};
         border-radius: 12px;
         padding: 1.25rem 1.5rem;
-        transition: border-color 0.2s;
+        transition: border-color 0.2s, background 0.2s;
     }}
     .metric-card:hover {{
         border-color: {COLORS["border_l"]};
+        background: {COLORS["surface2"]};
     }}
     .metric-label {{
         font-size: 0.75rem;
@@ -174,22 +173,22 @@ st.markdown(f"""
     .pill-blue {{
         background: {COLORS["blue_dim"]};
         color: {COLORS["blue"]};
-        border: 1px solid {COLORS["blue"]}33;
+        border: 1px solid rgba(255,255,255,0.1);
     }}
     .pill-lblue {{
-        background: {COLORS["blue_dim"]}44;
+        background: {COLORS["blue_dim"]};
         color: {COLORS["blue_light"]};
-        border: 1px solid {COLORS["blue_light"]}33;
+        border: 1px solid rgba(255,255,255,0.08);
     }}
     .pill-green {{
         background: {COLORS["green_dim"]};
         color: {COLORS["green"]};
-        border: 1px solid {COLORS["green"]}33;
+        border: 1px solid rgba(255,255,255,0.1);
     }}
     .pill-gray {{
-        background: #33333344;
+        background: rgba(255,255,255,0.04);
         color: {COLORS["text_dim"]};
-        border: 1px solid {COLORS["text_dim"]}33;
+        border: 1px solid rgba(255,255,255,0.06);
     }}
 
     /* Divider */
@@ -218,8 +217,11 @@ st.markdown(f"""
 
     /* Sidebar */
     [data-testid="stSidebar"] {{
-        background: {COLORS["surface"]};
+        background: #1a1a1f !important;
         border-right: 1px solid {COLORS["border"]};
+    }}
+    [data-testid="stSidebar"] > div:first-child {{
+        background: #1a1a1f !important;
     }}
     [data-testid="stSidebar"] * {{
         color: {COLORS["text"]} !important;
@@ -228,6 +230,8 @@ st.markdown(f"""
     /* Plotly chart backgrounds */
     .stPlotlyChart {{
         background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid {COLORS["border"]};
         border-radius: 12px;
         padding: 0.5rem;
@@ -248,25 +252,28 @@ st.markdown(f"""
     /* Input fields */
     .stTextInput > div > div > input {{
         background: {COLORS["surface2"]} !important;
+        backdrop-filter: blur(12px) !important;
         border: 1px solid {COLORS["border"]} !important;
         border-radius: 8px !important;
         color: {COLORS["text"]} !important;
     }}
     .stTextInput > div > div > input:focus {{
-        border-color: {COLORS["accent"]} !important;
-        box-shadow: 0 0 0 1px {COLORS["accent"]}44 !important;
+        border-color: rgba(255,255,255,0.25) !important;
+        box-shadow: 0 0 0 1px rgba(255,255,255,0.1) !important;
     }}
 
     /* Multiselect */
     .stMultiSelect > div > div {{
         background: {COLORS["surface2"]} !important;
+        backdrop-filter: blur(12px) !important;
         border: 1px solid {COLORS["border"]} !important;
         border-radius: 8px !important;
     }}
 
     /* Download buttons */
     .stDownloadButton > button {{
-        background: {COLORS["surface2"]} !important;
+        background: {COLORS["surface"]} !important;
+        backdrop-filter: blur(12px) !important;
         border: 1px solid {COLORS["border"]} !important;
         color: {COLORS["text"]} !important;
         border-radius: 8px !important;
@@ -274,14 +281,17 @@ st.markdown(f"""
         transition: all 0.2s !important;
     }}
     .stDownloadButton > button:hover {{
-        border-color: {COLORS["accent"]} !important;
+        border-color: {COLORS["border_l"]} !important;
+        background: {COLORS["surface2"]} !important;
         color: #ffffff !important;
     }}
 
     /* Cheapest deal card */
     .deal-card {{
-        background: linear-gradient(135deg, {COLORS["green_dim"]}, {COLORS["surface"]});
-        border: 1px solid {COLORS["green"]}44;
+        background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255,255,255,0.1);
         border-radius: 14px;
         padding: 1.5rem 2rem;
         margin: 1rem 0 1.5rem;
@@ -291,7 +301,7 @@ st.markdown(f"""
         font-weight: 600;
         text-transform: uppercase;
         letter-spacing: 0.06em;
-        color: {COLORS["green"]};
+        color: {COLORS["text_dim"]};
         margin-bottom: 0.6rem;
     }}
     .deal-card .deal-medicine {{
@@ -305,7 +315,7 @@ st.markdown(f"""
         margin-top: 0.3rem;
     }}
     .deal-card .deal-saving {{
-        color: {COLORS["green"]};
+        color: {COLORS["accent"]};
         font-weight: 600;
     }}
 
@@ -314,22 +324,26 @@ st.markdown(f"""
         display: inline-block;
         padding: 6px 16px;
         border-radius: 8px;
-        background: {COLORS["green_dim"]};
-        border: 1px solid {COLORS["green"]}44;
-        color: {COLORS["green"]} !important;
+        background: {COLORS["surface"]};
+        backdrop-filter: blur(12px);
+        border: 1px solid {COLORS["border"]};
+        color: {COLORS["text"]} !important;
         font-size: 0.8rem;
         font-weight: 600;
         text-decoration: none !important;
-        transition: background 0.2s;
+        transition: all 0.2s;
         margin-top: 0.5rem;
     }}
     .wa-btn:hover {{
-        background: {COLORS["green"]}22;
+        border-color: {COLORS["border_l"]};
+        background: {COLORS["surface2"]};
     }}
 
     /* Cart summary card */
     .cart-summary {{
         background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid {COLORS["border"]};
         border-radius: 12px;
         padding: 1.25rem 1.5rem;
@@ -341,13 +355,15 @@ st.markdown(f"""
         color: #ffffff;
     }}
     .cart-winner {{
-        border-color: {COLORS["green"]}66;
-        background: linear-gradient(135deg, {COLORS["green_dim"]}, {COLORS["surface"]});
+        border-color: rgba(255,255,255,0.15);
+        background: rgba(255,255,255,0.07);
     }}
 
     /* Dialog / modal */
     div[data-testid="stModal"] > div {{
-        background: {COLORS["surface"]} !important;
+        background: rgba(15,15,20,0.85) !important;
+        backdrop-filter: blur(24px) !important;
+        -webkit-backdrop-filter: blur(24px) !important;
         border: 1px solid {COLORS["border_l"]} !important;
         border-radius: 16px !important;
         color: {COLORS["text"]} !important;
@@ -362,6 +378,7 @@ st.markdown(f"""
     }}
     div[data-testid="stModal"] button[kind="primary"] {{
         background: {COLORS["surface2"]} !important;
+        backdrop-filter: blur(12px) !important;
         border: 1px solid {COLORS["border_l"]} !important;
         color: #ffffff !important;
         border-radius: 8px !important;
@@ -379,11 +396,13 @@ st.markdown(f"""
     }}
     /* Dialog backdrop */
     div[data-testid="stModal"]::backdrop {{
-        background: rgba(0, 0, 0, 0.7) !important;
+        background: rgba(0, 0, 0, 0.6) !important;
+        backdrop-filter: blur(4px) !important;
     }}
     /* Selectbox dropdown list */
     div[data-testid="stModal"] [data-baseweb="popover"] {{
-        background: {COLORS["surface"]} !important;
+        background: rgba(15,15,20,0.9) !important;
+        backdrop-filter: blur(16px) !important;
         border: 1px solid {COLORS["border_l"]} !important;
         border-radius: 8px !important;
     }}
@@ -397,6 +416,8 @@ st.markdown(f"""
     /* Scanner card */
     .scanner-card {{
         background: {COLORS["surface"]};
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         border: 1px solid {COLORS["border"]};
         border-radius: 12px;
         padding: 1.25rem 1.5rem;
@@ -420,6 +441,94 @@ st.markdown(f"""
     .scanner-match-detail {{
         color: {COLORS["text_dim"]};
         font-size: 0.8rem;
+    }}
+
+    /* Streamlit tabs */
+    .stTabs [data-baseweb="tab-list"] {{
+        background: {COLORS["surface"]};
+        backdrop-filter: blur(12px);
+        border: 1px solid {COLORS["border"]};
+        border-radius: 10px;
+        padding: 4px;
+        gap: 0;
+    }}
+    .stTabs [data-baseweb="tab"] {{
+        border-radius: 8px;
+        color: {COLORS["text_dim"]} !important;
+        font-weight: 500;
+        padding: 6px 16px;
+    }}
+    .stTabs [aria-selected="true"] {{
+        background: {COLORS["surface2"]} !important;
+        color: #ffffff !important;
+    }}
+
+    /* Streamlit buttons */
+    .stButton > button {{
+        background: {COLORS["surface"]} !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid {COLORS["border"]} !important;
+        color: {COLORS["text"]} !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s !important;
+    }}
+    .stButton > button:hover {{
+        border-color: {COLORS["border_l"]} !important;
+        background: {COLORS["surface2"]} !important;
+        color: #ffffff !important;
+    }}
+
+    /* Streamlit expander */
+    .streamlit-expanderHeader {{
+        background: {COLORS["surface"]} !important;
+        backdrop-filter: blur(12px);
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 10px !important;
+        color: {COLORS["text"]} !important;
+    }}
+
+    /* Text area */
+    .stTextArea textarea {{
+        background: {COLORS["surface2"]} !important;
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 8px !important;
+        color: {COLORS["text"]} !important;
+    }}
+
+    /* Selectbox */
+    .stSelectbox > div > div {{
+        background: {COLORS["surface2"]} !important;
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 8px !important;
+    }}
+    [data-baseweb="popover"] {{
+        background: rgba(15,15,20,0.9) !important;
+        backdrop-filter: blur(16px) !important;
+        border: 1px solid {COLORS["border_l"]} !important;
+        border-radius: 8px !important;
+    }}
+
+    /* Alerts / info boxes */
+    .stAlert {{
+        background: {COLORS["surface"]} !important;
+        backdrop-filter: blur(12px) !important;
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 10px !important;
+    }}
+
+    /* Multiselect tags — grey glass */
+    .stMultiSelect [data-baseweb="tag"] {{
+        background: rgba(255,255,255,0.1) !important;
+        border: 1px solid rgba(255,255,255,0.15) !important;
+        border-radius: 6px !important;
+        color: #e4e4e7 !important;
+    }}
+    .stMultiSelect [data-baseweb="tag"] span {{
+        color: #e4e4e7 !important;
+    }}
+    .stMultiSelect [data-baseweb="tag"] [role="presentation"] {{
+        color: #a1a1aa !important;
     }}
 </style>
 """, unsafe_allow_html=True)
