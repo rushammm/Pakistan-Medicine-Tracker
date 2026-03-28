@@ -4,6 +4,7 @@ Run with: python -m pytest tests/
 """
 
 import os
+import csv
 import sqlite3
 import tempfile
 
@@ -12,6 +13,9 @@ import pytest
 # Ensure project root is on path
 import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+PHARMACIES_CSV = os.path.join(BASE_DIR, "data", "pharmacies.csv")
 
 from scraper.scrape import (
     flag_overpriced,
@@ -183,3 +187,45 @@ class TestDetectAnomalies:
         for rec in result:
             assert "anomaly" in rec
             assert rec["anomaly"] in (0, 1)
+
+
+# ---------------------------------------------------------------------------
+# Pharmacy data tests
+# ---------------------------------------------------------------------------
+
+class TestPharmacyData:
+    def _load_csv(self):
+        rows = []
+        with open(PHARMACIES_CSV, newline="", encoding="utf-8") as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                rows.append(row)
+        return rows, reader.fieldnames
+
+    def test_csv_exists(self):
+        assert os.path.exists(PHARMACIES_CSV), "data/pharmacies.csv does not exist"
+
+    def test_csv_structure(self):
+        _, fieldnames = self._load_csv()
+        required = {"name", "address", "city", "phone", "latitude", "longitude"}
+        assert required.issubset(set(fieldnames)), (
+            f"Missing columns: {required - set(fieldnames)}"
+        )
+
+    def test_csv_has_enough_rows(self):
+        rows, _ = self._load_csv()
+        assert len(rows) >= 20, f"Expected at least 20 pharmacies, got {len(rows)}"
+
+    def test_cities_covered(self):
+        rows, _ = self._load_csv()
+        cities = {row["city"] for row in rows}
+        expected = {"Karachi", "Lahore", "Islamabad", "Rawalpindi", "Peshawar", "Faisalabad"}
+        assert expected.issubset(cities), f"Missing cities: {expected - cities}"
+
+    def test_coordinates_in_pakistan(self):
+        rows, _ = self._load_csv()
+        for row in rows:
+            lat = float(row["latitude"])
+            lon = float(row["longitude"])
+            assert 24 <= lat <= 37, f"Latitude {lat} out of Pakistan bounds for {row['name']}"
+            assert 61 <= lon <= 77, f"Longitude {lon} out of Pakistan bounds for {row['name']}"

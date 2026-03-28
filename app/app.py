@@ -22,10 +22,14 @@ from sklearn.ensemble import IsolationForest
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "medicines.db")
+PHARMACIES_CSV = os.path.join(BASE_DIR, "data", "pharmacies.csv")
 sys.path.insert(0, BASE_DIR)
 
+DAWAAI_SEARCH_URL = "https://dawaai.pk/search?q={query}"
+MEDSTORE_SEARCH_URL = "https://medstore.com.pk/catalogsearch/result/?q={query}"
+
 # ---------------------------------------------------------------------------
-# Color palette
+# Color palette  —  green & blue only
 # ---------------------------------------------------------------------------
 
 COLORS = {
@@ -36,14 +40,14 @@ COLORS = {
     "border_l":   "#2a2a2a",
     "text":       "#e0e0e0",
     "text_dim":   "#666666",
-    "accent":     "#6c63ff",
-    "accent_dim": "#4a42cc",
-    "red":        "#ef4444",
-    "red_dim":    "#7f1d1d",
-    "green":      "#22c55e",
-    "green_dim":  "#14532d",
-    "amber":      "#f59e0b",
-    "cyan":       "#06b6d4",
+    "accent":     "#3b82f6",      # blue-500
+    "accent_dim": "#1d4ed8",      # blue-700
+    "blue":       "#3b82f6",      # blue-500
+    "blue_dim":   "#1e3a5f",      # dark blue
+    "blue_light": "#60a5fa",      # blue-400
+    "green":      "#22c55e",      # green-500
+    "green_dim":  "#14532d",      # dark green
+    "green_light":"#34d399",      # green-400
 }
 
 # ---------------------------------------------------------------------------
@@ -82,7 +86,7 @@ st.markdown(f"""
         position: absolute;
         top: 0; left: 0; right: 0;
         height: 3px;
-        background: linear-gradient(90deg, {COLORS["accent"]}, {COLORS["cyan"]}, {COLORS["accent"]});
+        background: linear-gradient(90deg, {COLORS["blue"]}, {COLORS["green"]}, {COLORS["blue"]});
     }}
     .hero h1 {{
         font-size: 1.75rem;
@@ -129,8 +133,8 @@ st.markdown(f"""
         color: #ffffff;
         line-height: 1;
     }}
-    .metric-value.red {{ color: {COLORS["red"]}; }}
-    .metric-value.amber {{ color: {COLORS["amber"]}; }}
+    .metric-value.blue {{ color: {COLORS["blue"]}; }}
+    .metric-value.lblue {{ color: {COLORS["blue_light"]}; }}
     .metric-value.green {{ color: {COLORS["green"]}; }}
     .metric-sub {{
         font-size: 0.75rem;
@@ -156,20 +160,20 @@ st.markdown(f"""
         font-weight: 600;
         letter-spacing: 0.02em;
     }}
-    .pill-red {{
-        background: {COLORS["red_dim"]};
-        color: {COLORS["red"]};
-        border: 1px solid {COLORS["red"]}33;
+    .pill-blue {{
+        background: {COLORS["blue_dim"]};
+        color: {COLORS["blue"]};
+        border: 1px solid {COLORS["blue"]}33;
+    }}
+    .pill-lblue {{
+        background: {COLORS["blue_dim"]}44;
+        color: {COLORS["blue_light"]};
+        border: 1px solid {COLORS["blue_light"]}33;
     }}
     .pill-green {{
         background: {COLORS["green_dim"]};
         color: {COLORS["green"]};
         border: 1px solid {COLORS["green"]}33;
-    }}
-    .pill-amber {{
-        background: #451a0344;
-        color: {COLORS["amber"]};
-        border: 1px solid {COLORS["amber"]}33;
     }}
     .pill-gray {{
         background: #33333344;
@@ -328,6 +332,28 @@ def detect_anomalies_df(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+@st.cache_data
+def load_pharmacies() -> pd.DataFrame:
+    if not os.path.exists(PHARMACIES_CSV):
+        return pd.DataFrame()
+    return pd.read_csv(PHARMACIES_CSV)
+
+
+# ---------------------------------------------------------------------------
+# Location dialog
+# ---------------------------------------------------------------------------
+
+PHARMACY_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Peshawar", "Faisalabad"]
+
+@st.dialog("Where are you located?")
+def location_dialog():
+    st.markdown("Select your city so we can show you the **nearest pharmacies**.")
+    city = st.selectbox("Your city", options=PHARMACY_CITIES, key="loc_dialog_city")
+    if st.button("Confirm", type="primary", use_container_width=True):
+        st.session_state["user_city"] = city
+        st.rerun()
+
+
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
@@ -352,10 +378,16 @@ def render_sidebar(df: pd.DataFrame):
     avail_options = ["All", "In Stock", "Out of Stock", "Limited", "Unknown"]
     selected_avail = st.sidebar.selectbox("Availability", avail_options)
 
+    pharmacies_df = load_pharmacies()
+    cities = ["All"] + sorted(pharmacies_df["city"].unique().tolist()) if not pharmacies_df.empty else ["All"]
+    user_city = st.session_state.get("user_city", "All")
+    default_idx = cities.index(user_city) if user_city in cities else 0
+    selected_city = st.sidebar.selectbox("Pharmacy City", cities, index=default_idx)
+
     st.sidebar.markdown("---")
     st.sidebar.caption("Built by [Rusham Elahi](https://github.com/rushammm)")
 
-    return overpriced_only, selected_source, selected_avail
+    return overpriced_only, selected_source, selected_avail, selected_city
 
 
 # ---------------------------------------------------------------------------
@@ -365,6 +397,10 @@ def render_sidebar(df: pd.DataFrame):
 def main():
     ensure_data()
     df = load_data()
+
+    # --- Location popup (first visit only) ---
+    if "user_city" not in st.session_state:
+        location_dialog()
 
     # --- Hero ---
     st.markdown("""
@@ -382,7 +418,7 @@ def main():
     df = detect_anomalies_df(df)
     if "availability" not in df.columns:
         df["availability"] = "Unknown"
-    overpriced_only, selected_source, selected_avail = render_sidebar(df)
+    overpriced_only, selected_source, selected_avail, selected_city = render_sidebar(df)
 
     filtered = df.copy()
     if overpriced_only:
@@ -414,12 +450,12 @@ def main():
         </div>
         <div class="metric-card">
             <div class="metric-label">Overpriced</div>
-            <div class="metric-value red">{overpriced_n}</div>
+            <div class="metric-value blue">{overpriced_n}</div>
             <div class="metric-sub">above DRAP threshold</div>
         </div>
         <div class="metric-card">
             <div class="metric-label">Anomalies</div>
-            <div class="metric-value amber">{anomaly_n}</div>
+            <div class="metric-value lblue">{anomaly_n}</div>
             <div class="metric-sub">unusual price patterns</div>
         </div>
         <div class="metric-card">
@@ -478,8 +514,8 @@ def main():
             f'<span class="pill {cls}">{label}: {avail_counts.get(label, 0)}</span>'
             for label, cls in [
                 ("In Stock", "pill-green"),
-                ("Limited", "pill-amber"),
-                ("Out of Stock", "pill-red"),
+                ("Limited", "pill-lblue"),
+                ("Out of Stock", "pill-blue"),
                 ("Unknown", "pill-gray"),
             ]
         )
@@ -514,6 +550,70 @@ def main():
                 mime="text/plain",
             )
 
+    # --- Similar Formula Finder ---
+    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Similar Formula Finder</div>', unsafe_allow_html=True)
+
+    all_medicines = df["name"].unique().tolist()
+    selected_medicine = st.selectbox(
+        "Select a medicine to find alternatives with the same active ingredient",
+        options=sorted(all_medicines),
+        key="formula_finder",
+    )
+
+    if selected_medicine:
+        med_row = df[df["name"] == selected_medicine].iloc[0]
+        generic = med_row.get("generic_name", "")
+
+        if generic:
+            st.markdown(
+                f'Active ingredient: <span class="pill pill-green">{generic}</span>',
+                unsafe_allow_html=True,
+            )
+
+            alternatives = df[
+                df["generic_name"].str.lower() == generic.lower()
+            ].sort_values("scraped_at").drop_duplicates(subset=["name", "source"], keep="last")
+
+            if len(alternatives["name"].unique()) > 1:
+                alt_display = alternatives[
+                    ["name", "brand", "price_pkr", "drap_price_pkr",
+                     "overprice_pct", "availability", "source"]
+                ].copy().sort_values("price_pkr")
+                alt_display.columns = [
+                    "Medicine", "Brand", "Price (PKR)", "DRAP Price (PKR)",
+                    "Overprice %", "Availability", "Source",
+                ]
+                st.dataframe(alt_display, width="stretch", hide_index=True)
+
+                fig_alt = px.bar(
+                    alternatives,
+                    x="name",
+                    y="price_pkr",
+                    color="source",
+                    barmode="group",
+                    labels={"name": "Medicine", "price_pkr": "Price (PKR)", "source": "Source"},
+                    title=f"Price Comparison — {generic}",
+                    color_discrete_sequence=[COLORS["blue"], COLORS["green"]],
+                )
+                drap_val = alternatives["drap_price_pkr"].iloc[0]
+                if drap_val and drap_val > 0:
+                    fig_alt.add_hline(
+                        y=drap_val,
+                        line_dash="dot",
+                        line_color=COLORS["green_light"],
+                        annotation_text=f"DRAP: Rs {drap_val:.0f}",
+                        annotation_position="top left",
+                        annotation_font_size=10,
+                        annotation_font_color=COLORS["green_light"],
+                    )
+                fig_alt.update_layout(**PLOTLY_LAYOUT, height=400)
+                st.plotly_chart(fig_alt, width="stretch")
+            else:
+                st.info(f"No other brands found for **{generic}**. This is the only tracked medicine with this formula.")
+        else:
+            st.info("No generic name information available for this medicine.")
+
     # --- Charts ---
     st.markdown('<hr class="divider">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Overpricing Analysis</div>', unsafe_allow_html=True)
@@ -536,7 +636,7 @@ def main():
                 y="name",
                 orientation="h",
                 color="overprice_pct",
-                color_continuous_scale=[COLORS["amber"], COLORS["red"]],
+                color_continuous_scale=[COLORS["blue_light"], COLORS["blue"]],
                 labels={"overprice_pct": "% Above DRAP", "name": ""},
                 title="Top 10 Overpriced",
             )
@@ -561,7 +661,7 @@ def main():
                 labels=["Overpriced", "Fairly Priced"],
                 values=[overpriced_count, fair_count],
                 hole=0.55,
-                marker=dict(colors=[COLORS["red"], COLORS["green"]]),
+                marker=dict(colors=[COLORS["blue"], COLORS["green"]]),
                 textfont=dict(color="#ffffff", size=13),
                 hoverinfo="label+value+percent",
             )])
@@ -596,8 +696,8 @@ def main():
 
         color_map = {
             "In Stock": COLORS["green"],
-            "Limited": COLORS["amber"],
-            "Out of Stock": COLORS["red"],
+            "Limited": COLORS["blue_light"],
+            "Out of Stock": COLORS["blue"],
             "Unknown": COLORS["text_dim"],
         }
 
@@ -666,9 +766,9 @@ def main():
                 },
                 title="Medicine Price Trends",
                 color_discrete_sequence=[
-                    COLORS["accent"], COLORS["cyan"], COLORS["amber"],
-                    COLORS["green"], COLORS["red"], "#a78bfa", "#f472b6",
-                    "#34d399", "#fbbf24", "#60a5fa",
+                    COLORS["blue"], COLORS["green"], COLORS["blue_light"],
+                    COLORS["green_light"], "#1d4ed8", "#15803d", "#93c5fd",
+                    "#86efac", "#2563eb", "#16a34a",
                 ],
             )
 
@@ -699,7 +799,7 @@ def main():
                             marker=dict(
                                 symbol="diamond",
                                 size=12,
-                                color=COLORS["red"],
+                                color=COLORS["blue"],
                                 line=dict(width=1, color="#ffffff"),
                             ),
                             name="Anomaly",
@@ -724,6 +824,121 @@ def main():
             st.info("Select at least one medicine to see trends.")
     else:
         st.info("Not enough data points for trend analysis. Run the scraper multiple times to build history.")
+
+    # --- Find a Pharmacy ---
+    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Find a Pharmacy</div>', unsafe_allow_html=True)
+
+    # Part A — Online Pharmacies
+    search_term = selected_medicine if selected_medicine else (search if search else "")
+    dawaai_url = DAWAAI_SEARCH_URL.format(query=search_term.replace(" ", "+")) if search_term else "#"
+    medstore_url = MEDSTORE_SEARCH_URL.format(query=search_term.replace(" ", "+")) if search_term else "#"
+
+    online_col1, online_col2 = st.columns(2)
+
+    if search_term:
+        med_data_dawaai = df[
+            (df["name"] == search_term) & (df["source"].str.contains("dawaai", case=False))
+        ]
+        med_data_medstore = df[
+            (df["name"] == search_term) & (df["source"].str.contains("medstore", case=False))
+        ]
+
+        dawaai_avail = med_data_dawaai["availability"].iloc[0] if not med_data_dawaai.empty else "Unknown"
+        dawaai_price = f"Rs {med_data_dawaai['price_pkr'].iloc[0]:.0f}" if not med_data_dawaai.empty else "N/A"
+        medstore_avail = med_data_medstore["availability"].iloc[0] if not med_data_medstore.empty else "Unknown"
+        medstore_price = f"Rs {med_data_medstore['price_pkr'].iloc[0]:.0f}" if not med_data_medstore.empty else "N/A"
+    else:
+        dawaai_avail = "Unknown"
+        dawaai_price = "N/A"
+        medstore_avail = "Unknown"
+        medstore_price = "N/A"
+
+    avail_pill_map = {
+        "In Stock": "pill-green",
+        "Limited": "pill-lblue",
+        "Out of Stock": "pill-blue",
+        "Unknown": "pill-gray",
+    }
+
+    with online_col1:
+        pill_cls = avail_pill_map.get(dawaai_avail, "pill-gray")
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">Dawaai.pk</div>
+            <span class="pill {pill_cls}">{dawaai_avail}</span>
+            <div class="metric-value" style="font-size:1.3rem; margin-top:0.5rem;">{dawaai_price}</div>
+            <div class="metric-sub" style="margin-top:0.5rem;">
+                <a href="{dawaai_url}" target="_blank" style="color:{COLORS['accent']};">Search on Dawaai.pk</a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with online_col2:
+        pill_cls = avail_pill_map.get(medstore_avail, "pill-gray")
+        st.markdown(f"""
+        <div class="metric-card">
+            <div class="metric-label">MedStore.com.pk</div>
+            <span class="pill {pill_cls}">{medstore_avail}</span>
+            <div class="metric-value" style="font-size:1.3rem; margin-top:0.5rem;">{medstore_price}</div>
+            <div class="metric-sub" style="margin-top:0.5rem;">
+                <a href="{medstore_url}" target="_blank" style="color:{COLORS['accent']};">Search on MedStore.com.pk</a>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Part B — Physical Pharmacies
+    user_city = st.session_state.get("user_city", None)
+    if user_city:
+        st.markdown(
+            f'<div class="section-title" style="margin-top:1.5rem;">Pharmacies Near You — '
+            f'<span class="pill pill-green">{user_city}</span></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="section-title" style="margin-top:1.5rem;">Physical Pharmacies</div>',
+            unsafe_allow_html=True,
+        )
+
+    pharmacies_df = load_pharmacies()
+    if not pharmacies_df.empty:
+        phy_df = pharmacies_df.copy()
+        if selected_city != "All":
+            phy_df = phy_df[phy_df["city"] == selected_city]
+
+        phy_display = phy_df[["name", "address", "city", "phone"]].copy()
+        phy_display.columns = ["Pharmacy", "Address", "City", "Phone"]
+        st.dataframe(phy_display, width="stretch", hide_index=True)
+
+        # Map
+        if selected_city != "All":
+            center_lat = phy_df["latitude"].mean()
+            center_lon = phy_df["longitude"].mean()
+            zoom = 11
+        else:
+            center_lat = 30.3753
+            center_lon = 69.3451
+            zoom = 5
+
+        fig_map = px.scatter_mapbox(
+            phy_df,
+            lat="latitude",
+            lon="longitude",
+            hover_name="name",
+            hover_data={"address": True, "city": True, "phone": True, "latitude": False, "longitude": False},
+            color_discrete_sequence=[COLORS["green"]],
+            zoom=zoom,
+            center={"lat": center_lat, "lon": center_lon},
+            height=450,
+        )
+        fig_map.update_layout(
+            mapbox_style="open-street-map",
+            margin=dict(l=0, r=0, t=0, b=0),
+        )
+        st.plotly_chart(fig_map, width="stretch")
+    else:
+        st.info("Pharmacy location data not available.")
 
     # --- Footer ---
     st.markdown(f"""
