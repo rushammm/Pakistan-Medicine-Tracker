@@ -7,5 +7,4 @@ scikit-learn
 schedule
 lxml
 numpy
-google-genai
 pytest

@@ -1,9 +1,6 @@
-# Pakistan Medicine Price Tracker
+# Pakistan Medicine Price Tracker (MedTracker PK)
 
-![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen)
+
 
 A real-time medicine price monitoring dashboard that scrapes Pakistani pharmacy websites and compares prices against **DRAP (Drug Regulatory Authority of Pakistan)** registered rates to flag overpricing.
 
