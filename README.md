@@ -1,4 +1,4 @@
-# 💊 Pakistan Medicine Price Tracker
+# Pakistan Medicine Price Tracker
 
 ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)
@@ -34,14 +34,14 @@ This project was built to:
 
 ## Features
 
-- 🔍 **Live Scraping** — Fetches medicine prices from [Dawaai.pk](https://dawaai.pk)
-- 📊 **DRAP Comparison** — Flags medicines priced >10% above official DRAP rates
-- 📈 **Price Trends** — Tracks price changes over time with interactive line charts
-- 🥧 **Visual Analytics** — Bar charts (top overpriced), pie charts (fair vs overpriced)
-- 🔎 **Search & Filter** — Find any medicine instantly, filter by overpriced status or source
-- 🔄 **On-Demand Scraping** — Trigger a fresh scrape from the sidebar
-- 🛡️ **Synthetic Fallback** — Always shows data, even if live scraping is blocked
-- 💾 **SQLite Storage** — Persistent local database for historical tracking
+-  **Live Scraping** — Fetches medicine prices from [Dawaai.pk](https://dawaai.pk)
+-  **DRAP Comparison** — Flags medicines priced >10% above official DRAP rates
+-  **Price Trends** — Tracks price changes over time with interactive line charts
+-  **Visual Analytics** — Bar charts (top overpriced), pie charts (fair vs overpriced)
+-  **Search & Filter** — Find any medicine instantly, filter by overpriced status or source
+-  **On-Demand Scraping** — Trigger a fresh scrape from the sidebar
+-  **Synthetic Fallback** — Always shows data, even if live scraping is blocked
+-  **SQLite Storage** — Persistent local database for historical tracking
 
 ---
 
@@ -117,7 +117,7 @@ Contributions are welcome! Here's how you can help:
 
 This project is inspired by and contributes to ongoing research on healthcare accessibility in South Asia:
 
-📄 **ICONIP 2024 Published Paper**
+ **ICONIP 2024 Published Paper**
 *"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"*
 [Read the paper →](https://link.springer.com/conference/iconip)
 
@@ -149,6 +149,6 @@ This project is licensed under the **MIT License** — see the [LICENSE](LICENSE
 ---
 
 <p align="center">
-  <strong>Built with ❤️ by Rusham Elahi</strong><br>
+  <strong>Built by Rusham Elahi</strong><br>
   <em>Making medicine prices transparent in Pakistan</em>
 </p>
