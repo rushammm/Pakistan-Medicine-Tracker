@@ -1,26 +1,182 @@
 name,generic_name,drap_price_pkr
-Panadol,Paracetamol,55.00
-Augmentin 625mg,Amoxicillin/Clavulanate,580.00
+Panadol 500mg,Paracetamol,34.50
+Panadol Extra,Paracetamol/Caffeine,57.00
+Calpol 500mg,Paracetamol,45.00
+Calpol Pediatric Syrup,Paracetamol,104.80
+Paracetamol 500mg,Paracetamol,25.00
+Tylenol PK 500mg,Paracetamol,55.00
 Brufen 400mg,Ibuprofen,120.00
-Disprin,Aspirin,45.00
-Flagyl 400mg,Metronidazole,85.00
-Risek 20mg,Omeprazole,210.00
-Nexium 40mg,Esomeprazole,650.00
-Atorva 20mg,Atorvastatin,250.00
-Crestor 10mg,Rosuvastatin,520.00
-Glucophage 500mg,Metformin,95.00
-Amoxil 500mg,Amoxicillin,180.00
-Zithromax 500mg,Azithromycin,390.00
-Cipro 500mg,Ciprofloxacin,160.00
+Brufen 200mg,Ibuprofen,43.79
+Ibuprofen 200mg,Ibuprofen,30.00
+Ibuprofen 400mg,Ibuprofen,55.00
 Voltaren 50mg,Diclofenac,140.00
-Ponstan 500mg,Mefenamic Acid,110.00
-Ibuprofen 200mg,Ibuprofen,65.00
-Paracetamol 500mg,Paracetamol,35.00
-Omeprazole 20mg,Omeprazole,150.00
-Metformin 500mg,Metformin,70.00
-Cetirizine 10mg,Cetirizine,48.00
-Azomax 500mg,Azithromycin,320.00
-Entamizole,Metronidazole/Diloxanide,75.00
-Rigix 10mg,Cetirizine,62.00
-Calpol,Paracetamol,90.00
+Dicloran 50mg,Diclofenac,115.60
+Diclofenac 50mg,Diclofenac,65.00
+Ponstan Forte 500mg,Mefenamic Acid,57.70
+Mefenamic Acid 500mg,Mefenamic Acid,35.00
+Ponstan 250mg,Mefenamic Acid,38.50
+Disprin 300mg,Aspirin,29.60
+Loprin 75mg,Aspirin,26.00
+Aspirin 75mg,Aspirin,20.00
+Synflex 550mg,Naproxen,266.00
+Naproxen 500mg,Naproxen,120.00
+Tramal 50mg,Tramadol,237.50
+Tramal Plus,Tramadol/Paracetamol,237.50
+Nuberol Forte,Paracetamol/Orphenadrine,61.75
+Augmentin 625mg,Amoxicillin/Clavulanate,267.90
+Augmentin 1g,Amoxicillin/Clavulanate,348.12
+Co-Amoxiclav 625mg,Amoxicillin/Clavulanate,150.00
+Amoxil 500mg,Amoxicillin,180.00
+Amoxicillin 500mg,Amoxicillin,85.00
+Ospamox 500mg,Amoxicillin,110.00
+Azomax 500mg,Azithromycin,521.28
+Azithromycin 500mg,Azithromycin,180.00
+Zetro 500mg,Azithromycin,320.00
+Novidat 500mg,Ciprofloxacin,422.80
+Cipro 500mg,Ciprofloxacin,160.00
+Ciprofloxacin 500mg,Ciprofloxacin,90.00
+Flagyl 400mg,Metronidazole,45.20
+Metronidazole 400mg,Metronidazole,30.00
+Entamizole DS,Metronidazole/Diloxanide,280.05
+Cefspan 400mg,Cefixime,693.50
+Cefixime 400mg,Cefixime,250.00
+Velosef 500mg,Cephradine,200.00
+Leflox 500mg,Levofloxacin,520.10
+Levoxin 500mg,Levofloxacin,380.00
+Levofloxacin 500mg,Levofloxacin,210.00
+Klaricid 500mg,Clarithromycin,580.00
+Clarithromycin 500mg,Clarithromycin,250.00
 Septran DS,Sulfamethoxazole/Trimethoprim,130.00
+Erythrocin 500mg,Erythromycin,207.10
+Glucophage 500mg,Metformin,200.50
+Glucophage XR 500mg,Metformin,94.40
+Metformin 500mg,Metformin,55.00
+Glucophage XR 750mg,Metformin,390.00
+Amaryl 2mg,Glimepiride,684.00
+Glimepiride 2mg,Glimepiride,120.00
+Getryl 2mg,Glimepiride,617.10
+Sita 50mg,Sitagliptin,286.37
+Januvia 50mg,Sitagliptin,850.00
+Treviamet 50/500mg,Sitagliptin/Metformin,567.00
+Dapa 10mg,Dapagliflozin,567.56
+Forxiga 10mg,Dapagliflozin,750.00
+Diamicron MR 60mg,Gliclazide,599.00
+Lantus Solostar,Insulin Glargine,3120.00
+NovoRapid FlexPen,Insulin Aspart,1600.00
+Norvasc 5mg,Amlodipine,476.70
+Norvasc 10mg,Amlodipine,932.40
+Amlodipine 5mg,Amlodipine,45.00
+Sofvasc 5mg,Amlodipine,169.50
+Cozaar 50mg,Losartan,651.00
+Losartan 50mg,Losartan,120.00
+Lorinace 50mg,Losartan,250.00
+Tenormin 50mg,Atenolol,150.00
+Atenolol 50mg,Atenolol,40.00
+Renitec 10mg,Enalapril,290.00
+Enalapril 10mg,Enalapril,60.00
+Telmis 40mg,Telmisartan,280.00
+Telmisartan 40mg,Telmisartan,120.00
+Micardis 40mg,Telmisartan,650.00
+Concor 5mg,Bisoprolol,331.24
+Concor 2.5mg,Bisoprolol,182.42
+Byscard 5mg,Bisoprolol,352.52
+Valtec 80mg,Valsartan,259.84
+Valsartan 80mg,Valsartan,130.00
+Inderal 10mg,Propranolol,154.00
+Lipiget 10mg,Atorvastatin,330.00
+Atorva 20mg,Atorvastatin,420.00
+Lipitor 10mg,Atorvastatin,1800.00
+Atorvastatin 20mg,Atorvastatin,150.00
+X-Plended 20mg,Atorvastatin,670.00
+Rovista 10mg,Rosuvastatin,453.33
+Crestor 10mg,Rosuvastatin,520.00
+Rosuvastatin 10mg,Rosuvastatin,200.00
+Statin 20mg,Simvastatin,180.00
+Simvastatin 20mg,Simvastatin,85.00
+Risek 20mg,Omeprazole,203.33
+Risek 40mg,Omeprazole,287.00
+Omeprazole 20mg,Omeprazole,80.00
+Omez 20mg,Omeprazole,150.00
+Nexum 40mg,Esomeprazole,322.00
+Nexum 20mg,Esomeprazole,197.50
+Ezium 20mg,Esomeprazole,280.00
+Esomeprazole 20mg,Esomeprazole,120.00
+Lansoprazole 30mg,Lansoprazole,130.00
+Lanzol 30mg,Lansoprazole,350.00
+Pantoprazole 40mg,Pantoprazole,120.00
+Pantoget 40mg,Pantoprazole,280.00
+Rigix 10mg,Cetirizine,370.50
+Zyrtec 10mg,Cetirizine,185.40
+Cetirizine 10mg,Cetirizine,48.00
+Softin 10mg,Cetirizine,95.30
+Claritine 10mg,Loratadine,250.00
+Loratadine 10mg,Loratadine,55.00
+Myteka 10mg,Montelukast,263.62
+Montiget 10mg,Montelukast,263.62
+Montika 10mg,Montelukast,484.54
+Montelukast 10mg,Montelukast,120.00
+Ventolin Evohaler,Salbutamol,362.56
+Salbo HFA Inhaler,Salbutamol,368.67
+Atem Inhaler,Salbutamol,146.49
+Flixonase Nasal Spray,Fluticasone,956.78
+Xaltide HFA Inhaler,Fluticasone/Salmeterol,762.38
+Fexet 120mg,Fexofenadine,320.00
+Fexofenadine 120mg,Fexofenadine,150.00
+Jardin-D 5mg,Desloratadine,246.30
+Cipralex 10mg,Escitalopram,680.00
+Estar 10mg,Escitalopram,235.13
+Escitalopram 10mg,Escitalopram,120.00
+Zoloft 50mg,Sertraline,3059.10
+Sert 50mg,Sertraline,427.90
+Sertraline 50mg,Sertraline,150.00
+Flux 20mg,Fluoxetine,407.54
+Prozac 20mg,Fluoxetine,850.00
+Fluoxetine 20mg,Fluoxetine,80.00
+Nervin 0.5mg,Alprazolam,100.00
+Azolam 0.5mg,Alprazolam,98.67
+Alprazolam 0.5mg,Alprazolam,45.00
+Rivotril 0.5mg,Clonazepam,180.00
+Clonazepam 0.5mg,Clonazepam,65.00
+Chewcal 400mg,Calcium/Vitamin D3,264.60
+Cal One-D,Calcium/Vitamin D3,175.50
+Calrich Sachet,Calcium/Vitamin D3/Magnesium,25.00
+Ostegem OD,Calcium/Vitamin D3/Vitamin K2,912.00
+Opt-D 200000IU,Vitamin D3,420.00
+Intig-D,Vitamin D3,156.80
+Iberet Folic-500,Iron/Folic Acid,382.36
+Fefolvit,Iron/Folic Acid,147.84
+Sangobion Capsule,Iron/B-Complex,104.50
+Surbex Z 30s,Vitamin B-Complex/Zinc,480.00
+Neurobion Tablet,Vitamin B-Complex,136.10
+Folic Acid 5mg,Folic Acid,22.00
+Betnovate-N Cream,Betamethasone/Neomycin,171.60
+Betnesol 0.5mg,Betamethasone,38.50
+Fucidin Cream 15g,Fusidic Acid,285.00
+Fucibet Cream,Fusidic Acid/Betamethasone,350.00
+Canesten Cream 20g,Clotrimazole,180.00
+Dermosporin Cream,Clotrimazole,151.00
+Polyfax Skin Ointment,Bacitracin/Polymyxin B,212.38
+Clobevate Cream,Clobetasol Propionate,207.10
+Diane-35,Cyproterone/Ethinylestradiol,452.00
+Marvelon,Desogestrel/Ethinylestradiol,380.00
+Duphaston 10mg,Dydrogesterone,625.00
+Benylin DM Syrup,Dextromethorphan/Diphenhydramine,110.00
+Corex-D Syrup,Dextromethorphan/Chlorpheniramine,82.00
+Prospan Syrup,Ivy Leaf Extract,660.26
+Mucosolvan Syrup,Ambroxol,220.00
+Ambroxol Syrup,Ambroxol,85.00
+Movax 2mg,Tizanidine,484.60
+Movax 4mg,Tizanidine,330.10
+Tizanidine 2mg,Tizanidine,100.00
+Thyroxine 50mcg,Levothyroxine,237.00
+Eltroxin 50mcg,Levothyroxine,350.00
+Lowplat 75mg,Clopidogrel,279.34
+Plavix 75mg,Clopidogrel,1397.00
+Clopidogrel 75mg,Clopidogrel,120.00
+Warfarin 5mg,Warfarin,55.00
+Marevan 5mg,Warfarin,180.00
+Valium 5mg,Diazepam,23.90
+Librax,Chlordiazepoxide/Clidinium,95.00
+Evion 400mg,Vitamin E,134.30
+Vitrum Tablet,Multivitamin,474.90
+Arinac Forte,Ibuprofen/Pseudoephedrine,150.00

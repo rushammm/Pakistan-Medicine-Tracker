@@ -180,7 +180,7 @@ def scrape_dawaai(medicine_name: str) -> list[dict]:
     results = []
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=HEADERS, timeout=(3, 10))
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -261,7 +261,7 @@ def scrape_medstore(medicine_name: str) -> list[dict]:
     results = []
 
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp = requests.get(url, headers=HEADERS, timeout=(3, 10))
         resp.raise_for_status()
         soup = BeautifulSoup(resp.text, "lxml")
 
@@ -454,30 +454,53 @@ def run_scraper():
     live_success = False
 
     logger.info("[INFO] Attempting live scraping from dawaai.pk and medstore.com.pk ...")
+
+    # Quick reachability probe — skip a source entirely after first DNS/connection
+    # failure to avoid 181 × timeout waits.
+    skip_dawaai = False
+    skip_medstore = False
+    dawaai_conn_failures = 0
+    medstore_conn_failures = 0
+    _FAIL_THRESHOLD = 2  # skip source after this many consecutive connection failures
+
     for med in drap_medicines:
         # Scrape dawaai.pk
-        scraped_dawaai = scrape_dawaai(med["name"])
-        time.sleep(1)  # polite delay between requests
+        if not skip_dawaai:
+            scraped_dawaai = scrape_dawaai(med["name"])
+            time.sleep(1)  # polite delay between requests
 
-        for rec in scraped_dawaai:
-            rec["generic_name"] = med["generic_name"]
-            rec["drap_price_pkr"] = med["drap_price_pkr"]
-            all_records.append(flag_overpriced(rec))
+            for rec in scraped_dawaai:
+                rec["generic_name"] = med["generic_name"]
+                rec["drap_price_pkr"] = med["drap_price_pkr"]
+                all_records.append(flag_overpriced(rec))
 
-        if scraped_dawaai:
-            live_success = True
+            if scraped_dawaai:
+                live_success = True
+                dawaai_conn_failures = 0
+            else:
+                dawaai_conn_failures += 1
+                if dawaai_conn_failures >= _FAIL_THRESHOLD:
+                    logger.info("  [SKIP] dawaai.pk unreachable after %d failures — skipping remaining", _FAIL_THRESHOLD)
+                    skip_dawaai = True
 
         # Scrape medstore.com.pk
-        scraped_medstore = scrape_medstore(med["name"])
-        time.sleep(1)
+        if not skip_medstore:
+            scraped_medstore = scrape_medstore(med["name"])
+            time.sleep(1)
 
-        for rec in scraped_medstore:
-            rec["generic_name"] = med["generic_name"]
-            rec["drap_price_pkr"] = med["drap_price_pkr"]
-            all_records.append(flag_overpriced(rec))
+            for rec in scraped_medstore:
+                rec["generic_name"] = med["generic_name"]
+                rec["drap_price_pkr"] = med["drap_price_pkr"]
+                all_records.append(flag_overpriced(rec))
 
-        if scraped_medstore:
-            live_success = True
+            if scraped_medstore:
+                live_success = True
+                medstore_conn_failures = 0
+            else:
+                medstore_conn_failures += 1
+                if medstore_conn_failures >= _FAIL_THRESHOLD:
+                    logger.info("  [SKIP] medstore.com.pk unreachable after %d failures — skipping remaining", _FAIL_THRESHOLD)
+                    skip_medstore = True
 
     # Step 4: Fall back to synthetic data if scraping returned nothing
     if not all_records:

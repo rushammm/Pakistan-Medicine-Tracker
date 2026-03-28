@@ -76,7 +76,7 @@ class TestFlagOverpriced:
 class TestLoadDrapPrices:
     def test_returns_correct_count(self):
         medicines = load_drap_prices()
-        assert len(medicines) == 25
+        assert len(medicines) >= 100
 
     def test_record_structure(self):
         medicines = load_drap_prices()
@@ -100,8 +100,8 @@ class TestGenerateSynthetic:
     def test_record_count(self):
         drap = load_drap_prices()
         records = generate_synthetic(drap)
-        # 25 medicines * (2 current sources + 4 historical) = 150
-        assert len(records) == 25 * 6
+        # each medicine generates 6 records (2 current sources + 4 historical)
+        assert len(records) == len(drap) * 6
 
     def test_record_fields(self):
         drap = load_drap_prices()
