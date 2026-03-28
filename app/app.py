@@ -1,9 +1,6 @@
 """
 Pakistan Medicine Price Tracker — Streamlit Dashboard
 =====================================================
-A professional dashboard that visualises medicine prices scraped from
-Pakistani pharmacy websites and flags overpricing against DRAP rates.
-
 Run with:  streamlit run app/app.py
 """
 
@@ -13,9 +10,11 @@ import sqlite3
 from datetime import datetime
 
 import pandas as pd
+import numpy as np
 import streamlit as st
 import plotly.express as px
 import plotly.graph_objects as go
+from sklearn.ensemble import IsolationForest
 
 # ---------------------------------------------------------------------------
 # Paths
@@ -23,93 +22,273 @@ import plotly.graph_objects as go
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "medicines.db")
-
-# Add project root so we can import the scraper
 sys.path.insert(0, BASE_DIR)
 
+# ---------------------------------------------------------------------------
+# Color palette
+# ---------------------------------------------------------------------------
+
+COLORS = {
+    "bg":         "#0a0a0a",
+    "surface":    "#111111",
+    "surface2":   "#1a1a1a",
+    "border":     "#222222",
+    "border_l":   "#2a2a2a",
+    "text":       "#e0e0e0",
+    "text_dim":   "#666666",
+    "accent":     "#6c63ff",
+    "accent_dim": "#4a42cc",
+    "red":        "#ef4444",
+    "red_dim":    "#7f1d1d",
+    "green":      "#22c55e",
+    "green_dim":  "#14532d",
+    "amber":      "#f59e0b",
+    "cyan":       "#06b6d4",
+}
 
 # ---------------------------------------------------------------------------
-# Page configuration & custom CSS
+# Page config & theme
 # ---------------------------------------------------------------------------
 
 st.set_page_config(
-    page_title="Pakistan Medicine Price Tracker",
-    page_icon="💊",
+    page_title="MedTracker PK",
+    page_icon="",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-st.markdown("""
+st.markdown(f"""
 <style>
-    /* Main header styling */
-    .main-header {
-        background: linear-gradient(135deg, #0d6efd 0%, #198754 100%);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        color: white;
-        margin-bottom: 1.5rem;
-    }
-    .main-header h1 { margin: 0; font-size: 2rem; }
-    .main-header p  { margin: 0.3rem 0 0 0; opacity: 0.9; font-size: 1rem; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+    /* Global */
+    .stApp {{
+        background-color: {COLORS["bg"]};
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }}
+
+    /* Header */
+    .hero {{
+        background: {COLORS["surface"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 16px;
+        padding: 2.5rem 2.5rem 2rem;
+        margin-bottom: 2rem;
+        position: relative;
+        overflow: hidden;
+    }}
+    .hero::before {{
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, {COLORS["accent"]}, {COLORS["cyan"]}, {COLORS["accent"]});
+    }}
+    .hero h1 {{
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #ffffff;
+        margin: 0 0 0.35rem 0;
+        letter-spacing: -0.03em;
+    }}
+    .hero p {{
+        color: {COLORS["text_dim"]};
+        font-size: 0.9rem;
+        margin: 0;
+        font-weight: 400;
+    }}
 
     /* Metric cards */
-    div[data-testid="stMetric"] {
-        background: #f8f9fa;
-        border: 1px solid #dee2e6;
-        border-radius: 10px;
-        padding: 1rem;
-    }
+    .metric-row {{
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 2rem;
+    }}
+    .metric-card {{
+        flex: 1;
+        background: {COLORS["surface"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        transition: border-color 0.2s;
+    }}
+    .metric-card:hover {{
+        border-color: {COLORS["border_l"]};
+    }}
+    .metric-label {{
+        font-size: 0.75rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: {COLORS["text_dim"]};
+        margin-bottom: 0.5rem;
+    }}
+    .metric-value {{
+        font-size: 1.75rem;
+        font-weight: 700;
+        color: #ffffff;
+        line-height: 1;
+    }}
+    .metric-value.red {{ color: {COLORS["red"]}; }}
+    .metric-value.amber {{ color: {COLORS["amber"]}; }}
+    .metric-value.green {{ color: {COLORS["green"]}; }}
+    .metric-sub {{
+        font-size: 0.75rem;
+        color: {COLORS["text_dim"]};
+        margin-top: 0.35rem;
+    }}
 
-    /* Overpriced badge */
-    .badge-overpriced {
-        background-color: #dc3545;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 4px;
+    /* Section headers */
+    .section-title {{
+        font-size: 1rem;
         font-weight: 600;
-        font-size: 0.85rem;
-    }
-    .badge-fair {
-        background-color: #198754;
-        color: white;
-        padding: 2px 8px;
-        border-radius: 4px;
+        color: #ffffff;
+        margin: 2rem 0 1rem 0;
+        letter-spacing: -0.01em;
+    }}
+
+    /* Status pills */
+    .pill {{
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 20px;
+        font-size: 0.75rem;
         font-weight: 600;
-        font-size: 0.85rem;
-    }
+        letter-spacing: 0.02em;
+    }}
+    .pill-red {{
+        background: {COLORS["red_dim"]};
+        color: {COLORS["red"]};
+        border: 1px solid {COLORS["red"]}33;
+    }}
+    .pill-green {{
+        background: {COLORS["green_dim"]};
+        color: {COLORS["green"]};
+        border: 1px solid {COLORS["green"]}33;
+    }}
+    .pill-amber {{
+        background: #451a0344;
+        color: {COLORS["amber"]};
+        border: 1px solid {COLORS["amber"]}33;
+    }}
+    .pill-gray {{
+        background: #33333344;
+        color: {COLORS["text_dim"]};
+        border: 1px solid {COLORS["text_dim"]}33;
+    }}
+
+    /* Divider */
+    .divider {{
+        border: none;
+        border-top: 1px solid {COLORS["border"]};
+        margin: 2rem 0;
+    }}
 
     /* Footer */
-    .footer {
+    .footer {{
         text-align: center;
-        padding: 1.5rem 0;
-        margin-top: 2rem;
-        border-top: 1px solid #dee2e6;
-        color: #6c757d;
-        font-size: 0.85rem;
-    }
+        padding: 2rem 0 1rem;
+        color: {COLORS["text_dim"]};
+        font-size: 0.8rem;
+    }}
+    .footer a {{
+        color: {COLORS["accent"]};
+        text-decoration: none;
+    }}
 
-    /* Hide default Streamlit branding */
-    #MainMenu {visibility: hidden;}
-    footer {visibility: hidden;}
+    /* Hide Streamlit chrome */
+    #MainMenu {{visibility: hidden;}}
+    footer {{visibility: hidden;}}
+    header {{visibility: hidden;}}
 
-    /* Sidebar styling */
-    [data-testid="stSidebar"] {
-        background: linear-gradient(180deg, #f8f9fa 0%, #e9ecef 100%);
-    }
+    /* Sidebar */
+    [data-testid="stSidebar"] {{
+        background: {COLORS["surface"]};
+        border-right: 1px solid {COLORS["border"]};
+    }}
+    [data-testid="stSidebar"] * {{
+        color: {COLORS["text"]} !important;
+    }}
+
+    /* Plotly chart backgrounds */
+    .stPlotlyChart {{
+        background: {COLORS["surface"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 12px;
+        padding: 0.5rem;
+    }}
+
+    /* Dataframe */
+    .stDataFrame {{
+        border: 1px solid {COLORS["border"]};
+        border-radius: 12px;
+        overflow: hidden;
+    }}
+
+    /* Streamlit metric override — hide default */
+    div[data-testid="stMetric"] {{
+        display: none;
+    }}
+
+    /* Input fields */
+    .stTextInput > div > div > input {{
+        background: {COLORS["surface2"]} !important;
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 8px !important;
+        color: {COLORS["text"]} !important;
+    }}
+    .stTextInput > div > div > input:focus {{
+        border-color: {COLORS["accent"]} !important;
+        box-shadow: 0 0 0 1px {COLORS["accent"]}44 !important;
+    }}
+
+    /* Multiselect */
+    .stMultiSelect > div > div {{
+        background: {COLORS["surface2"]} !important;
+        border: 1px solid {COLORS["border"]} !important;
+        border-radius: 8px !important;
+    }}
+
+    /* Download buttons */
+    .stDownloadButton > button {{
+        background: {COLORS["surface2"]} !important;
+        border: 1px solid {COLORS["border"]} !important;
+        color: {COLORS["text"]} !important;
+        border-radius: 8px !important;
+        font-weight: 500 !important;
+        transition: all 0.2s !important;
+    }}
+    .stDownloadButton > button:hover {{
+        border-color: {COLORS["accent"]} !important;
+        color: #ffffff !important;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
+# Plotly template
+PLOTLY_LAYOUT = dict(
+    paper_bgcolor="rgba(0,0,0,0)",
+    plot_bgcolor="rgba(0,0,0,0)",
+    font=dict(family="Inter, sans-serif", color=COLORS["text"], size=12),
+    title_font=dict(size=14, color="#ffffff"),
+    xaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
+    yaxis=dict(gridcolor=COLORS["border"], zerolinecolor=COLORS["border"]),
+    margin=dict(l=10, r=10, t=44, b=10),
+    hoverlabel=dict(
+        bgcolor=COLORS["surface2"],
+        bordercolor=COLORS["border"],
+        font_color=COLORS["text"],
+    ),
+)
 
 # ---------------------------------------------------------------------------
-# Data loading (cached)
+# Data loading
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=60)
 def load_data() -> pd.DataFrame:
-    """Load medicine data from SQLite. Returns an empty DataFrame if DB is missing."""
     if not os.path.exists(DB_PATH):
         return pd.DataFrame()
-
     try:
         conn = sqlite3.connect(DB_PATH)
         df = pd.read_sql_query("SELECT * FROM prices ORDER BY scraped_at DESC", conn)
@@ -120,10 +299,6 @@ def load_data() -> pd.DataFrame:
 
 
 def ensure_data():
-    """
-    Make sure the database exists and has data.
-    If not, run the scraper automatically so the app always shows something.
-    """
     if not os.path.exists(DB_PATH):
         needs_scrape = True
     else:
@@ -136,10 +311,21 @@ def ensure_data():
             needs_scrape = True
 
     if needs_scrape:
-        with st.spinner("First run — generating medicine data..."):
+        with st.spinner("Initializing data..."):
             from scraper.scrape import run_scraper
             run_scraper()
         st.cache_data.clear()
+
+
+def detect_anomalies_df(df: pd.DataFrame) -> pd.DataFrame:
+    if len(df) < 5:
+        df["anomaly"] = 0
+        return df
+    features = df[["price_pkr", "overprice_pct"]].fillna(0).values
+    model = IsolationForest(contamination=0.1, random_state=42)
+    preds = model.fit_predict(features)
+    df["anomaly"] = (preds == -1).astype(int)
+    return df
 
 
 # ---------------------------------------------------------------------------
@@ -147,99 +333,112 @@ def ensure_data():
 # ---------------------------------------------------------------------------
 
 def render_sidebar(df: pd.DataFrame):
-    """Render the sidebar controls and return filter settings."""
-    st.sidebar.title("⚙️ Controls")
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("### Filters")
 
-    # Run scraper button
-    if st.sidebar.button("🔄 Run Scraper", use_container_width=True):
-        with st.spinner("Scraping medicine prices..."):
+    if st.sidebar.button("Refresh Data", width="stretch"):
+        with st.spinner("Scraping prices..."):
             from scraper.scrape import run_scraper
             run_scraper()
         st.cache_data.clear()
         st.rerun()
 
-    st.sidebar.markdown("---")
+    st.sidebar.markdown("")
 
-    # Filter: overpriced only
-    overpriced_only = st.sidebar.toggle("🔴 Show overpriced only", value=False)
+    overpriced_only = st.sidebar.toggle("Overpriced only", value=False)
 
-    # Filter: source
     sources = ["All"] + sorted(df["source"].unique().tolist()) if not df.empty else ["All"]
-    selected_source = st.sidebar.selectbox("📦 Filter by source", sources)
+    selected_source = st.sidebar.selectbox("Source", sources)
+
+    avail_options = ["All", "In Stock", "Out of Stock", "Limited", "Unknown"]
+    selected_avail = st.sidebar.selectbox("Availability", avail_options)
 
     st.sidebar.markdown("---")
-    st.sidebar.markdown(
-        "**Built by [Rusham Elahi](https://github.com/)**"
-    )
+    st.sidebar.caption("Built by [Rusham Elahi](https://github.com/rushammm)")
 
-    return overpriced_only, selected_source
+    return overpriced_only, selected_source, selected_avail
 
 
 # ---------------------------------------------------------------------------
-# Main dashboard
+# Main
 # ---------------------------------------------------------------------------
 
 def main():
-    # Ensure we have data before anything else
     ensure_data()
-
-    # Load data
     df = load_data()
 
-    # ------ Header ------
+    # --- Hero ---
     st.markdown("""
-    <div class="main-header">
-        <h1>💊 Pakistan Medicine Price Tracker</h1>
-        <p>Monitoring pharmacy prices vs DRAP registered rates</p>
+    <div class="hero">
+        <h1>MedTracker PK</h1>
+        <p>Real-time pharmacy price monitoring vs DRAP regulated rates</p>
     </div>
     """, unsafe_allow_html=True)
 
-    # Handle empty data edge case
     if df.empty:
-        st.warning("No data available. Click **Run Scraper** in the sidebar to fetch prices.")
+        st.warning("No data available. Click **Refresh Data** in the sidebar.")
         render_sidebar(df)
         return
 
-    # Sidebar filters
-    overpriced_only, selected_source = render_sidebar(df)
+    df = detect_anomalies_df(df)
+    if "availability" not in df.columns:
+        df["availability"] = "Unknown"
+    overpriced_only, selected_source, selected_avail = render_sidebar(df)
 
-    # Apply filters
     filtered = df.copy()
     if overpriced_only:
         filtered = filtered[filtered["overpriced"] == 1]
     if selected_source != "All":
         filtered = filtered[filtered["source"] == selected_source]
+    if selected_avail != "All":
+        filtered = filtered[filtered["availability"] == selected_avail]
 
-    # ------ Top metrics row ------
-    # Use the latest record per medicine for aggregate stats
+    # --- Metrics ---
     latest = df.sort_values("scraped_at").drop_duplicates(subset=["name"], keep="last")
+    overpriced_n = int(latest["overpriced"].sum())
+    anomaly_n = int(df["anomaly"].sum()) if "anomaly" in df.columns else 0
+    last_updated = df["scraped_at"].max()
+    try:
+        ts = datetime.fromisoformat(last_updated).strftime("%d %b %Y, %I:%M %p")
+    except Exception:
+        ts = str(last_updated)
 
-    col1, col2, col3 = st.columns(3)
-    with col1:
-        st.metric("📋 Medicines Tracked", len(latest))
-    with col2:
-        overpriced_n = int(latest["overpriced"].sum())
-        st.metric(
-            "🔴 Overpriced",
-            overpriced_n,
-            delta=f"{overpriced_n} flagged" if overpriced_n > 0 else "None",
-            delta_color="inverse",
-        )
-    with col3:
-        last_updated = df["scraped_at"].max()
-        try:
-            ts = datetime.fromisoformat(last_updated).strftime("%d %b %Y, %I:%M %p")
-        except Exception:
-            ts = str(last_updated)
-        st.metric("🕒 Last Updated", ts)
+    avail_total = len(latest)
+    avail_in_stock = int((latest["availability"] == "In Stock").sum()) if "availability" in latest.columns else 0
 
-    st.markdown("---")
+    st.markdown(f"""
+    <div class="metric-row">
+        <div class="metric-card">
+            <div class="metric-label">Tracked</div>
+            <div class="metric-value">{len(latest)}</div>
+            <div class="metric-sub">unique medicines</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Overpriced</div>
+            <div class="metric-value red">{overpriced_n}</div>
+            <div class="metric-sub">above DRAP threshold</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Anomalies</div>
+            <div class="metric-value amber">{anomaly_n}</div>
+            <div class="metric-sub">unusual price patterns</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Availability</div>
+            <div class="metric-value green">{avail_in_stock} / {avail_total}</div>
+            <div class="metric-sub">in stock</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-label">Last Updated</div>
+            <div class="metric-value" style="font-size:1.1rem; margin-top:0.25rem;">{ts}</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
-    # ------ Search bar ------
+    # --- Search ---
     search = st.text_input(
-        "🔍 Search medicines",
+        "Search medicines",
         placeholder="Type a medicine name (e.g. Panadol, Augmentin) ...",
+        label_visibility="collapsed",
     )
     if search:
         filtered = filtered[
@@ -247,37 +446,77 @@ def main():
             | filtered["generic_name"].str.contains(search, case=False, na=False)
         ]
 
-    # ------ Main data table ------
-    st.subheader("Medicine Price Comparison")
+    # --- Data table ---
+    st.markdown('<div class="section-title">Price Comparison</div>', unsafe_allow_html=True)
 
     if filtered.empty:
         st.info("No medicines match your current filters.")
     else:
-        # Prepare display dataframe
         display_cols = [
             "name", "brand", "price_pkr", "drap_price_pkr",
-            "overprice_pct", "overpriced", "source", "scraped_at",
+            "overprice_pct", "overpriced", "availability", "source", "scraped_at",
         ]
         display_df = filtered[display_cols].copy()
         display_df["overpriced"] = display_df["overpriced"].map(
-            {1: "🔴 Overpriced", 0: "🟢 Fair"}
+            {1: "OVERPRICED", 0: "FAIR"}
         )
         display_df.columns = [
             "Medicine", "Brand", "Price (PKR)", "DRAP Price (PKR)",
-            "Overprice %", "Status", "Source", "Scraped At",
+            "Overprice %", "Status", "Availability", "Source", "Scraped At",
         ]
 
         st.dataframe(
             display_df,
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
             height=400,
         )
 
-    st.markdown("---")
+        # Availability pills legend
+        avail_counts = filtered["availability"].value_counts()
+        pills_html = " &nbsp; ".join(
+            f'<span class="pill {cls}">{label}: {avail_counts.get(label, 0)}</span>'
+            for label, cls in [
+                ("In Stock", "pill-green"),
+                ("Limited", "pill-amber"),
+                ("Out of Stock", "pill-red"),
+                ("Unknown", "pill-gray"),
+            ]
+        )
+        st.markdown(f'<div style="margin: 0.5rem 0 1rem;">{pills_html}</div>', unsafe_allow_html=True)
 
-    # ------ Charts row: bar + pie side by side ------
-    st.subheader("📊 Overpricing Analysis")
+        # Export
+        exp1, exp2, _ = st.columns([1, 1, 4])
+        with exp1:
+            csv_data = display_df.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                label="Download CSV",
+                data=csv_data,
+                file_name=f"medicine_prices_{datetime.now().strftime('%Y%m%d')}.csv",
+                mime="text/csv",
+            )
+        with exp2:
+            report_lines = [
+                "Pakistan Medicine Price Tracker - Report",
+                f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
+                f"Total Medicines: {len(display_df)}",
+                f"Overpriced: {(display_df['Status'] == 'OVERPRICED').sum()}",
+                f"Fairly Priced: {(display_df['Status'] == 'FAIR').sum()}",
+                "",
+                "--- Detailed Data ---",
+                "",
+            ]
+            report_text = "\n".join(report_lines) + "\n" + display_df.to_csv(index=False)
+            st.download_button(
+                label="Download Report",
+                data=report_text.encode("utf-8"),
+                file_name=f"medicine_report_{datetime.now().strftime('%Y%m%d')}.txt",
+                mime="text/plain",
+            )
+
+    # --- Charts ---
+    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Overpricing Analysis</div>', unsafe_allow_html=True)
 
     latest_filtered = filtered.sort_values("scraped_at").drop_duplicates(
         subset=["name"], keep="last"
@@ -286,7 +525,6 @@ def main():
     chart_col1, chart_col2 = st.columns(2)
 
     with chart_col1:
-        # Bar chart: Top 10 most overpriced medicines
         top_overpriced = (
             latest_filtered[latest_filtered["overprice_pct"] > 0]
             .nlargest(10, "overprice_pct")
@@ -298,61 +536,116 @@ def main():
                 y="name",
                 orientation="h",
                 color="overprice_pct",
-                color_continuous_scale=["#ffc107", "#dc3545"],
-                labels={"overprice_pct": "% Above DRAP", "name": "Medicine"},
-                title="Top 10 Most Overpriced Medicines",
+                color_continuous_scale=[COLORS["amber"], COLORS["red"]],
+                labels={"overprice_pct": "% Above DRAP", "name": ""},
+                title="Top 10 Overpriced",
             )
+            bar_layout = {**PLOTLY_LAYOUT}
+            bar_layout["yaxis"] = dict(autorange="reversed", gridcolor=COLORS["border"])
             fig_bar.update_layout(
-                yaxis=dict(autorange="reversed"),
+                **bar_layout,
                 showlegend=False,
                 height=400,
-                margin=dict(l=10, r=10, t=40, b=10),
+                coloraxis_showscale=False,
             )
-            st.plotly_chart(fig_bar, use_container_width=True)
+            st.plotly_chart(fig_bar, width="stretch")
         else:
             st.info("No overpriced medicines to display.")
 
     with chart_col2:
-        # Pie chart: Overpriced vs fairly priced
         if not latest_filtered.empty:
             overpriced_count = int(latest_filtered["overpriced"].sum())
             fair_count = len(latest_filtered) - overpriced_count
 
-            fig_pie = px.pie(
-                names=["Overpriced", "Fairly Priced"],
+            fig_pie = go.Figure(data=[go.Pie(
+                labels=["Overpriced", "Fairly Priced"],
                 values=[overpriced_count, fair_count],
-                color=["Overpriced", "Fairly Priced"],
-                color_discrete_map={
-                    "Overpriced": "#dc3545",
-                    "Fairly Priced": "#198754",
-                },
-                title="Overpriced vs Fairly Priced",
-                hole=0.4,
-            )
+                hole=0.55,
+                marker=dict(colors=[COLORS["red"], COLORS["green"]]),
+                textfont=dict(color="#ffffff", size=13),
+                hoverinfo="label+value+percent",
+            )])
             fig_pie.update_layout(
+                **PLOTLY_LAYOUT,
+                title="Price Distribution",
                 height=400,
-                margin=dict(l=10, r=10, t=40, b=10),
+                showlegend=True,
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.15,
+                    xanchor="center",
+                    x=0.5,
+                    font=dict(color=COLORS["text"]),
+                ),
             )
-            st.plotly_chart(fig_pie, use_container_width=True)
+            st.plotly_chart(fig_pie, width="stretch")
         else:
             st.info("No data to display.")
 
-    st.markdown("---")
+    # --- Availability Chart ---
+    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Availability Across Pharmacies</div>', unsafe_allow_html=True)
 
-    # ------ Price trend line chart ------
-    st.subheader("📈 Price Trends Over Time")
+    if "availability" in filtered.columns and not latest_filtered.empty:
+        # Get latest record per medicine per source
+        avail_data = filtered.sort_values("scraped_at").drop_duplicates(
+            subset=["name", "source"], keep="last"
+        )
+        avail_cross = avail_data.groupby(["name", "source"])["availability"].first().reset_index()
 
-    # Get medicines that have more than one data point for meaningful trends
+        color_map = {
+            "In Stock": COLORS["green"],
+            "Limited": COLORS["amber"],
+            "Out of Stock": COLORS["red"],
+            "Unknown": COLORS["text_dim"],
+        }
+
+        fig_avail = px.bar(
+            avail_cross,
+            x="name",
+            y=avail_cross["availability"].map(
+                {"In Stock": 1, "Limited": 0.5, "Out of Stock": 0, "Unknown": 0.25}
+            ),
+            color="availability",
+            barmode="group",
+            facet_col="source",
+            color_discrete_map=color_map,
+            labels={"name": "Medicine", "y": "Stock Level", "availability": "Status"},
+            title="Medicine Availability by Pharmacy",
+            category_orders={"availability": ["In Stock", "Limited", "Out of Stock", "Unknown"]},
+        )
+        fig_avail.update_layout(
+            **PLOTLY_LAYOUT,
+            height=420,
+            xaxis_tickangle=-45,
+            legend=dict(
+                orientation="h", yanchor="bottom", y=-0.35,
+                xanchor="center", x=0.5,
+            ),
+        )
+        fig_avail.update_yaxes(
+            tickvals=[0, 0.25, 0.5, 1],
+            ticktext=["Out of Stock", "Unknown", "Limited", "In Stock"],
+        )
+        st.plotly_chart(fig_avail, width="stretch")
+    else:
+        st.info("No availability data to display.")
+
+    # --- Trends ---
+    st.markdown('<hr class="divider">', unsafe_allow_html=True)
+    st.markdown('<div class="section-title">Price Trends</div>', unsafe_allow_html=True)
+
     med_counts = filtered.groupby("name").size()
     trending_meds = med_counts[med_counts > 1].index.tolist()
 
     if trending_meds:
-        # Let user pick which medicines to show on the trend chart
-        default_meds = trending_meds[:5]  # show first 5 by default
+        default_meds = trending_meds[:5]
         selected_meds = st.multiselect(
             "Select medicines to compare",
             options=trending_meds,
             default=default_meds,
+            label_visibility="collapsed",
         )
 
         if selected_meds:
@@ -372,46 +665,77 @@ def main():
                     "name": "Medicine",
                 },
                 title="Medicine Price Trends",
+                color_discrete_sequence=[
+                    COLORS["accent"], COLORS["cyan"], COLORS["amber"],
+                    COLORS["green"], COLORS["red"], "#a78bfa", "#f472b6",
+                    "#34d399", "#fbbf24", "#60a5fa",
+                ],
             )
 
-            # Add DRAP reference lines for selected medicines
             for med_name in selected_meds:
-                drap_val = trend_data[trend_data["name"] == med_name]["drap_price_pkr"].iloc[0]
-                if drap_val and drap_val > 0:
-                    fig_trend.add_hline(
-                        y=drap_val,
-                        line_dash="dash",
-                        line_color="gray",
-                        opacity=0.4,
-                        annotation_text=f"DRAP: {med_name}",
-                        annotation_position="top left",
-                        annotation_font_size=9,
+                med_data = trend_data[trend_data["name"] == med_name]
+                if not med_data.empty:
+                    drap_val = med_data["drap_price_pkr"].iloc[0]
+                    if drap_val and drap_val > 0:
+                        fig_trend.add_hline(
+                            y=drap_val,
+                            line_dash="dot",
+                            line_color=COLORS["text_dim"],
+                            opacity=0.3,
+                            annotation_text=f"DRAP: {med_name}",
+                            annotation_position="top left",
+                            annotation_font_size=9,
+                            annotation_font_color=COLORS["text_dim"],
+                        )
+
+            if "anomaly" in trend_data.columns:
+                anomalies = trend_data[trend_data["anomaly"] == 1]
+                if not anomalies.empty:
+                    fig_trend.add_trace(
+                        go.Scatter(
+                            x=anomalies["scraped_at"],
+                            y=anomalies["price_pkr"],
+                            mode="markers",
+                            marker=dict(
+                                symbol="diamond",
+                                size=12,
+                                color=COLORS["red"],
+                                line=dict(width=1, color="#ffffff"),
+                            ),
+                            name="Anomaly",
+                            hovertext=anomalies["name"] + " (anomaly)",
+                        )
                     )
 
             fig_trend.update_layout(
+                **PLOTLY_LAYOUT,
                 height=450,
-                margin=dict(l=10, r=10, t=40, b=10),
                 hovermode="x unified",
+                legend=dict(
+                    orientation="h",
+                    yanchor="bottom",
+                    y=-0.25,
+                    xanchor="center",
+                    x=0.5,
+                ),
             )
-            st.plotly_chart(fig_trend, use_container_width=True)
+            st.plotly_chart(fig_trend, width="stretch")
         else:
             st.info("Select at least one medicine to see trends.")
     else:
         st.info("Not enough data points for trend analysis. Run the scraper multiple times to build history.")
 
-    # ------ Footer ------
-    st.markdown("""
+    # --- Footer ---
+    st.markdown(f"""
     <div class="footer">
-        Data sourced from <strong>Dawaai.pk</strong> |
-        Compared against <strong>DRAP registered prices</strong> |
-        Built by <strong>Rusham Elahi</strong>
+        Data sourced from <strong>Dawaai.pk</strong> & <strong>MedStore.com.pk</strong>
+        &nbsp;&middot;&nbsp;
+        Compared against <strong>DRAP</strong> registered prices
+        &nbsp;&middot;&nbsp;
+        Built by <a href="https://github.com/rushammm">Rusham Elahi</a>
     </div>
     """, unsafe_allow_html=True)
 
-
-# ---------------------------------------------------------------------------
-# Entry point
-# ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
     main()

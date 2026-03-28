@@ -1,8 +1,8 @@
 """
 Pakistan Medicine Price Scraper
 ===============================
-Scrapes medicine prices from dawaai.pk and compares them against
-DRAP (Drug Regulatory Authority Pakistan) registered prices.
+Scrapes medicine prices from dawaai.pk and medstore.com.pk, compares them
+against DRAP (Drug Regulatory Authority Pakistan) registered prices.
 
 Falls back to realistic synthetic data if scraping fails.
 """
@@ -13,10 +13,15 @@ import csv
 import sqlite3
 import random
 import time
+import logging
+import argparse
 from datetime import datetime, timedelta
 
 import requests
 from bs4 import BeautifulSoup
+import schedule
+from sklearn.ensemble import IsolationForest
+import numpy as np
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -25,8 +30,11 @@ from bs4 import BeautifulSoup
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "medicines.db")
 DRAP_CSV = os.path.join(BASE_DIR, "data", "drap_prices.csv")
+LOG_PATH = os.path.join(BASE_DIR, "data", "scraper.log")
 
-SEARCH_URL = "https://dawaai.pk/search?q={query}"
+DAWAAI_SEARCH_URL = "https://dawaai.pk/search?q={query}"
+MEDSTORE_SEARCH_URL = "https://medstore.com.pk/catalogsearch/result/?q={query}"
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
@@ -37,6 +45,28 @@ HEADERS = {
 }
 
 OVERPRICE_THRESHOLD = 10  # percentage above DRAP price to flag as overpriced
+
+# ---------------------------------------------------------------------------
+# Logging setup
+# ---------------------------------------------------------------------------
+
+os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
+
+logger = logging.getLogger("medicine_scraper")
+logger.setLevel(logging.DEBUG)
+
+_console_handler = logging.StreamHandler()
+_console_handler.setLevel(logging.INFO)
+_console_handler.setFormatter(logging.Formatter("%(message)s"))
+
+_file_handler = logging.FileHandler(LOG_PATH, encoding="utf-8")
+_file_handler.setLevel(logging.DEBUG)
+_file_handler.setFormatter(
+    logging.Formatter("%(asctime)s [%(levelname)s] %(message)s")
+)
+
+logger.addHandler(_console_handler)
+logger.addHandler(_file_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -59,12 +89,13 @@ def init_db():
             overpriced    INTEGER DEFAULT 0,
             overprice_pct REAL DEFAULT 0.0,
             source        TEXT,
+            availability  TEXT DEFAULT 'Unknown',
             scraped_at    TEXT NOT NULL
         )
     """)
     conn.commit()
     conn.close()
-    print(f"[OK] Database initialised at {DB_PATH}")
+    logger.info("[OK] Database initialised at %s", DB_PATH)
 
 
 def save_to_db(records: list[dict]):
@@ -75,8 +106,8 @@ def save_to_db(records: list[dict]):
         cursor.execute("""
             INSERT INTO prices
                 (name, brand, generic_name, price_pkr, drap_price_pkr,
-                 overpriced, overprice_pct, source, scraped_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 overpriced, overprice_pct, source, availability, scraped_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             rec["name"],
             rec.get("brand", ""),
@@ -86,11 +117,12 @@ def save_to_db(records: list[dict]):
             rec.get("overpriced", 0),
             rec.get("overprice_pct", 0.0),
             rec.get("source", "unknown"),
+            rec.get("availability", "Unknown"),
             rec.get("scraped_at", datetime.now().isoformat()),
         ))
     conn.commit()
     conn.close()
-    print(f"[OK] Saved {len(records)} records to database")
+    logger.info("[OK] Saved %d records to database", len(records))
 
 
 # ---------------------------------------------------------------------------
@@ -108,7 +140,7 @@ def load_drap_prices() -> list[dict]:
                 "generic_name": row["generic_name"].strip(),
                 "drap_price_pkr": float(row["drap_price_pkr"]),
             })
-    print(f"[OK] Loaded {len(medicines)} medicines from DRAP reference CSV")
+    logger.info("[OK] Loaded %d medicines from DRAP reference CSV", len(medicines))
     return medicines
 
 
@@ -144,7 +176,7 @@ def scrape_dawaai(medicine_name: str) -> list[dict]:
     Scrape medicine prices from dawaai.pk search results.
     Returns a list of product dicts or an empty list on failure.
     """
-    url = SEARCH_URL.format(query=medicine_name.replace(" ", "+"))
+    url = DAWAAI_SEARCH_URL.format(query=medicine_name.replace(" ", "+"))
     results = []
 
     try:
@@ -186,21 +218,144 @@ def scrape_dawaai(medicine_name: str) -> list[dict]:
                 except ValueError:
                     continue
 
+                # Extract availability/stock status
+                availability = "In Stock"  # default if price found
+                stock_el = card.select_one(
+                    "[class*='stock'], [class*='avail'], [class*='Stock'], [class*='Avail']"
+                )
+                if stock_el:
+                    stock_text = stock_el.get_text(strip=True).lower()
+                    if "out of stock" in stock_text:
+                        availability = "Out of Stock"
+                    elif "limited" in stock_text or "low" in stock_text:
+                        availability = "Limited"
+
                 results.append({
                     "name": name,
                     "brand": name.split()[0] if name else "",
                     "price_pkr": price_val,
+                    "availability": availability,
                     "source": "dawaai.pk",
                     "scraped_at": datetime.now().isoformat(),
                 })
 
         if results:
-            print(f"  [LIVE] Scraped {len(results)} results for '{medicine_name}'")
+            logger.info("  [LIVE] Scraped %d results for '%s' from dawaai.pk", len(results), medicine_name)
 
     except requests.RequestException as e:
-        print(f"  [WARN] Scraping failed for '{medicine_name}': {e}")
+        logger.warning("  [WARN] dawaai.pk scraping failed for '%s': %s", medicine_name, e)
 
     return results
+
+
+# ---------------------------------------------------------------------------
+# Live scraper — medstore.com.pk
+# ---------------------------------------------------------------------------
+
+def scrape_medstore(medicine_name: str) -> list[dict]:
+    """
+    Scrape medicine prices from medstore.com.pk search results.
+    Returns a list of product dicts or an empty list on failure.
+    """
+    url = MEDSTORE_SEARCH_URL.format(query=medicine_name.replace(" ", "+"))
+    results = []
+
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "lxml")
+
+        # medstore.com.pk uses standard Magento-style product listing
+        product_cards = soup.select("li.product-item, div.product-item, ol.products li")
+
+        if not product_cards:
+            product_cards = soup.select("[class*='product'], [class*='Product']")
+
+        for card in product_cards[:5]:
+            name_el = card.select_one(
+                "a.product-item-link, h2, h3, [class*='name'], [class*='title']"
+            )
+            name = name_el.get_text(strip=True) if name_el else None
+
+            price_el = card.select_one(
+                "span.price, [class*='price'], [data-price-type='finalPrice']"
+            )
+            price_text = price_el.get_text(strip=True) if price_el else None
+
+            if name and price_text:
+                price_clean = (
+                    price_text.replace("Rs", "")
+                    .replace("Rs.", "")
+                    .replace(",", "")
+                    .replace("PKR", "")
+                    .replace("₨", "")
+                    .strip()
+                )
+                try:
+                    price_val = float(price_clean)
+                except ValueError:
+                    continue
+
+                # Extract availability/stock status
+                availability = "In Stock"  # default if price found
+                stock_el = card.select_one(
+                    "[class*='stock'], [class*='avail'], [class*='Stock'], [class*='Avail']"
+                )
+                if stock_el:
+                    stock_text = stock_el.get_text(strip=True).lower()
+                    if "out of stock" in stock_text:
+                        availability = "Out of Stock"
+                    elif "limited" in stock_text or "low" in stock_text:
+                        availability = "Limited"
+
+                results.append({
+                    "name": name,
+                    "brand": name.split()[0] if name else "",
+                    "price_pkr": price_val,
+                    "availability": availability,
+                    "source": "medstore.com.pk",
+                    "scraped_at": datetime.now().isoformat(),
+                })
+
+        if results:
+            logger.info("  [LIVE] Scraped %d results for '%s' from medstore.com.pk", len(results), medicine_name)
+
+    except requests.RequestException as e:
+        logger.warning("  [WARN] medstore.com.pk scraping failed for '%s': %s", medicine_name, e)
+
+    return results
+
+
+# ---------------------------------------------------------------------------
+# Anomaly detection
+# ---------------------------------------------------------------------------
+
+def detect_anomalies(records: list[dict]) -> list[dict]:
+    """
+    Use IsolationForest to detect anomalous price points.
+    Adds an 'anomaly' key (1 = anomaly, 0 = normal) to each record.
+    """
+    if len(records) < 5:
+        for rec in records:
+            rec["anomaly"] = 0
+        return records
+
+    prices = np.array([r["price_pkr"] for r in records]).reshape(-1, 1)
+
+    # Also use overprice_pct as a feature if available
+    overprice_pcts = np.array([r.get("overprice_pct", 0) for r in records]).reshape(-1, 1)
+    features = np.hstack([prices, overprice_pcts])
+
+    model = IsolationForest(contamination=0.1, random_state=42)
+    predictions = model.fit_predict(features)
+
+    for rec, pred in zip(records, predictions):
+        rec["anomaly"] = 1 if pred == -1 else 0
+
+    anomaly_count = sum(1 for r in records if r["anomaly"] == 1)
+    logger.info("[OK] Anomaly detection complete: %d anomalies out of %d records", anomaly_count, len(records))
+
+    return records
 
 
 # ---------------------------------------------------------------------------
@@ -217,7 +372,7 @@ def generate_synthetic(drap_medicines: list[dict]) -> list[dict]:
     now = datetime.now()
 
     for med in drap_medicines:
-        # Generate current price with random markup (0-40%)
+        # Generate current price with random markup (0-40%) for dawaai.pk
         markup = random.uniform(0.0, 0.40)
         price = round(med["drap_price_pkr"] * (1 + markup), 2)
 
@@ -227,10 +382,31 @@ def generate_synthetic(drap_medicines: list[dict]) -> list[dict]:
             "generic_name": med["generic_name"],
             "price_pkr": price,
             "drap_price_pkr": med["drap_price_pkr"],
+            "availability": random.choices(
+                ["In Stock", "Limited", "Out of Stock"],
+                weights=[75, 15, 10], k=1)[0],
             "source": "dawaai.pk (simulated)",
             "scraped_at": now.isoformat(),
         }
         records.append(flag_overpriced(record))
+
+        # Generate current price for medstore.com.pk (slightly different markup)
+        markup2 = random.uniform(0.0, 0.35)
+        price2 = round(med["drap_price_pkr"] * (1 + markup2), 2)
+
+        record2 = {
+            "name": med["name"],
+            "brand": med["name"].split()[0],
+            "generic_name": med["generic_name"],
+            "price_pkr": price2,
+            "drap_price_pkr": med["drap_price_pkr"],
+            "availability": random.choices(
+                ["In Stock", "Limited", "Out of Stock"],
+                weights=[75, 15, 10], k=1)[0],
+            "source": "medstore.com.pk (simulated)",
+            "scraped_at": now.isoformat(),
+        }
+        records.append(flag_overpriced(record2))
 
         # Generate 4 historical data points for trend charts
         for days_ago in [7, 14, 21, 30]:
@@ -242,12 +418,15 @@ def generate_synthetic(drap_medicines: list[dict]) -> list[dict]:
                 "generic_name": med["generic_name"],
                 "price_pkr": hist_price,
                 "drap_price_pkr": med["drap_price_pkr"],
+                "availability": random.choices(
+                    ["In Stock", "Limited", "Out of Stock"],
+                    weights=[75, 15, 10], k=1)[0],
                 "source": "dawaai.pk (simulated)",
                 "scraped_at": (now - timedelta(days=days_ago)).isoformat(),
             }
             records.append(flag_overpriced(hist_record))
 
-    print(f"[OK] Generated {len(records)} synthetic records (with history)")
+    logger.info("[OK] Generated %d synthetic records (with history)", len(records))
     return records
 
 
@@ -257,13 +436,12 @@ def generate_synthetic(drap_medicines: list[dict]) -> list[dict]:
 
 def run_scraper():
     """
-    Main entry point: initialise DB, attempt live scraping, fall back to
-    synthetic data if needed, flag overpriced medicines, and save to DB.
+    Main entry point: initialise DB, attempt live scraping from both sources,
+    fall back to synthetic data if needed, run anomaly detection, and save to DB.
     """
-    print("=" * 60)
-    print("  Pakistan Medicine Price Scraper")
-    print("=" * 60)
-    print()
+    logger.info("=" * 60)
+    logger.info("  Pakistan Medicine Price Scraper")
+    logger.info("=" * 60)
 
     # Step 1: Initialise the database
     init_db()
@@ -271,40 +449,76 @@ def run_scraper():
     # Step 2: Load DRAP reference data
     drap_medicines = load_drap_prices()
 
-    # Step 3: Attempt live scraping from dawaai.pk
+    # Step 3: Attempt live scraping from both sources
     all_records = []
     live_success = False
 
-    print("\n[INFO] Attempting live scraping from dawaai.pk ...")
+    logger.info("[INFO] Attempting live scraping from dawaai.pk and medstore.com.pk ...")
     for med in drap_medicines:
-        scraped = scrape_dawaai(med["name"])
+        # Scrape dawaai.pk
+        scraped_dawaai = scrape_dawaai(med["name"])
         time.sleep(1)  # polite delay between requests
 
-        for rec in scraped:
+        for rec in scraped_dawaai:
             rec["generic_name"] = med["generic_name"]
             rec["drap_price_pkr"] = med["drap_price_pkr"]
             all_records.append(flag_overpriced(rec))
 
-        if scraped:
+        if scraped_dawaai:
+            live_success = True
+
+        # Scrape medstore.com.pk
+        scraped_medstore = scrape_medstore(med["name"])
+        time.sleep(1)
+
+        for rec in scraped_medstore:
+            rec["generic_name"] = med["generic_name"]
+            rec["drap_price_pkr"] = med["drap_price_pkr"]
+            all_records.append(flag_overpriced(rec))
+
+        if scraped_medstore:
             live_success = True
 
     # Step 4: Fall back to synthetic data if scraping returned nothing
     if not all_records:
-        print("\n[INFO] Live scraping returned no data — generating synthetic fallback ...")
+        logger.info("[INFO] Live scraping returned no data — generating synthetic fallback ...")
         all_records = generate_synthetic(drap_medicines)
     elif not live_success:
-        print("\n[INFO] Partial scraping — supplementing with synthetic data ...")
+        logger.info("[INFO] Partial scraping — supplementing with synthetic data ...")
         all_records.extend(generate_synthetic(drap_medicines))
 
-    # Step 5: Save everything to the database
+    # Step 5: Anomaly detection
+    all_records = detect_anomalies(all_records)
+
+    # Step 6: Save everything to the database
     save_to_db(all_records)
 
     # Summary
     overpriced_count = sum(1 for r in all_records if r.get("overpriced"))
-    print(f"\n{'=' * 60}")
-    print(f"  Done! {len(all_records)} records saved.")
-    print(f"  Overpriced: {overpriced_count} / {len(all_records)}")
-    print(f"{'=' * 60}")
+    anomaly_count = sum(1 for r in all_records if r.get("anomaly"))
+    logger.info("=" * 60)
+    logger.info("  Done! %d records saved.", len(all_records))
+    logger.info("  Overpriced: %d / %d", overpriced_count, len(all_records))
+    logger.info("  Anomalies detected: %d", anomaly_count)
+    logger.info("=" * 60)
+
+
+# ---------------------------------------------------------------------------
+# Scheduled scraping
+# ---------------------------------------------------------------------------
+
+def run_scheduled(interval_hours: int = 6):
+    """Run the scraper on a recurring schedule."""
+    logger.info("[SCHEDULE] Starting scheduled scraping every %d hours", interval_hours)
+    logger.info("[SCHEDULE] First run starting now...")
+
+    run_scraper()
+
+    schedule.every(interval_hours).hours.do(run_scraper)
+
+    while True:
+        schedule.run_pending()
+        time.sleep(60)
 
 
 # ---------------------------------------------------------------------------
@@ -312,4 +526,21 @@ def run_scraper():
 # ---------------------------------------------------------------------------
 
 if __name__ == "__main__":
-    run_scraper()
+    parser = argparse.ArgumentParser(description="Pakistan Medicine Price Scraper")
+    parser.add_argument(
+        "--schedule",
+        action="store_true",
+        help="Run the scraper on a recurring schedule (default: every 6 hours)",
+    )
+    parser.add_argument(
+        "--interval",
+        type=int,
+        default=6,
+        help="Interval in hours for scheduled scraping (default: 6)",
+    )
+    args = parser.parse_args()
+
+    if args.schedule:
+        run_scheduled(interval_hours=args.interval)
+    else:
+        run_scraper()

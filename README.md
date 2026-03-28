@@ -1,9 +1,9 @@
 # Pakistan Medicine Price Tracker
 
-<!-- ![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
+![Python](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)
 ![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?logo=streamlit&logoColor=white)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
-![Status](https://img.shields.io/badge/Status-Active-brightgreen) -->
+![Status](https://img.shields.io/badge/Status-Active-brightgreen)
 
 A real-time medicine price monitoring dashboard that scrapes Pakistani pharmacy websites and compares prices against **DRAP (Drug Regulatory Authority of Pakistan)** registered rates to flag overpricing.
 
@@ -24,21 +24,16 @@ This project was built to:
 
 ---
 
-## Screenshot
-
-> ![Dashboard Screenshot](https://via.placeholder.com/900x500?text=Dashboard+Screenshot+Placeholder)
->
-> *Replace with an actual screenshot after running the app.*
-
----
-
 ## Features
 
--  **Live Scraping** — Fetches medicine prices from [Dawaai.pk](https://dawaai.pk)
+-  **Multi-Source Scraping** — Fetches prices from [Dawaai.pk](https://dawaai.pk) and [MedStore.com.pk](https://medstore.com.pk)
 -  **DRAP Comparison** — Flags medicines priced >10% above official DRAP rates
+-  **Anomaly Detection** — Uses scikit-learn IsolationForest to flag unusual price spikes
 -  **Price Trends** — Tracks price changes over time with interactive line charts
 -  **Visual Analytics** — Bar charts (top overpriced), pie charts (fair vs overpriced)
 -  **Search & Filter** — Find any medicine instantly, filter by overpriced status or source
+-  **CSV/Report Export** — Download filtered data as CSV or a summary report
+-  **Scheduled Scraping** — Automated price monitoring on a configurable interval
 -  **On-Demand Scraping** — Trigger a fresh scrape from the sidebar
 -  **Synthetic Fallback** — Always shows data, even if live scraping is blocked
 -  **SQLite Storage** — Persistent local database for historical tracking
@@ -52,8 +47,9 @@ This project was built to:
 | Frontend    | Streamlit, Plotly                   |
 | Scraping    | Requests, BeautifulSoup, lxml       |
 | Data        | Pandas, SQLite                      |
-| ML (future) | scikit-learn (anomaly detection)    |
+| ML          | scikit-learn (IsolationForest)      |
 | Scheduling  | schedule (automated scraping)       |
+| Testing     | pytest                              |
 
 ---
 
@@ -68,8 +64,8 @@ This project was built to:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/yourusername/pakistan-medicine-tracker.git
-cd pakistan-medicine-tracker
+git clone https://github.com/rushammm/Pakistan-Medicine-Tracker.git
+cd Pakistan-Medicine-Tracker
 
 # 2. Create a virtual environment (recommended)
 python -m venv venv
@@ -90,6 +86,24 @@ The app will open in your browser at `http://localhost:8501`.
 
 > **Note:** On the first run, the app will automatically generate synthetic data if the database is empty, so you can skip step 4 if you prefer.
 
+### Scheduled Scraping
+
+To run the scraper on an automatic schedule:
+
+```bash
+# Run every 6 hours (default)
+python scraper/scrape.py --schedule
+
+# Run every 2 hours
+python scraper/scrape.py --schedule --interval 2
+```
+
+### Running Tests
+
+```bash
+python -m pytest tests/ -v
+```
+
 ---
 
 ## How to Contribute
@@ -105,7 +119,6 @@ Contributions are welcome! Here's how you can help:
 ### Ideas for contributions
 
 - Add more pharmacy websites as scraping sources
-- Implement price anomaly detection using scikit-learn
 - Add SMS/email alerts for overpriced medicines
 - Build a REST API layer for mobile apps
 - Add Urdu language support
@@ -130,12 +143,15 @@ The paper explores systemic barriers to healthcare access across South Asian cou
 ```
 pakistan-medicine-tracker/
 ├── scraper/
-│   └── scrape.py           # Web scraper + synthetic data generator
+│   └── scrape.py           # Web scraper (dawaai.pk + medstore.com.pk) + anomaly detection
 ├── data/
 │   ├── drap_prices.csv     # DRAP reference prices (25 medicines)
 │   └── medicines.db        # SQLite database (auto-generated)
 ├── app/
-│   └── app.py              # Streamlit dashboard
+│   └── app.py              # Streamlit dashboard with exports & anomaly markers
+├── tests/
+│   └── test_scraper.py     # Unit tests
+├── .gitignore
 ├── requirements.txt        # Python dependencies
 └── README.md               # This file
 ```

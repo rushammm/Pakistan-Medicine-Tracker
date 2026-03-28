@@ -6,3 +6,5 @@ plotly
 scikit-learn
 schedule
 lxml
+numpy
+pytest
