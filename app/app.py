@@ -347,7 +347,7 @@ st.markdown(f"""
         border: 1px solid {COLORS["border"]};
         border-radius: 12px;
         padding: 1.25rem 1.5rem;
-        margin-top: 1rem;
+        margin-bottom: 0.5rem;
     }}
     .cart-total {{
         font-size: 1.5rem;
@@ -507,6 +507,14 @@ st.markdown(f"""
         backdrop-filter: blur(16px) !important;
         border: 1px solid {COLORS["border_l"]} !important;
         border-radius: 8px !important;
+    }}
+
+    /* Reduce default Streamlit block spacing */
+    .stElementContainer {{
+        margin-bottom: 0 !important;
+    }}
+    div[data-testid="stVerticalBlock"] > div {{
+        gap: 0.5rem !important;
     }}
 
     /* Alerts / info boxes */
