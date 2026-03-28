@@ -243,6 +243,35 @@ st.markdown(f"""
         border-radius: 12px;
         overflow: hidden;
     }}
+    .stDataFrame [data-testid="stDataFrameResizable"] {{
+        background: #131316 !important;
+    }}
+    .stDataFrame th,
+    .stDataFrame td,
+    .stDataFrame [role="gridcell"],
+    .stDataFrame [role="columnheader"] {{
+        background: #131316 !important;
+        color: {COLORS["text"]} !important;
+        border-color: #1e1e22 !important;
+    }}
+    .stDataFrame [role="columnheader"] {{
+        background: #1a1a1f !important;
+        color: #a1a1aa !important;
+    }}
+    /* Glide data grid (Streamlit's dataframe component) */
+    [data-testid="glideDataEditor"],
+    [data-testid="glideDataEditor"] * {{
+        --gdg-bg-cell: #131316 !important;
+        --gdg-bg-header: #1a1a1f !important;
+        --gdg-bg-header-has-focus: #1a1a1f !important;
+        --gdg-bg-header-hovered: #222226 !important;
+        --gdg-border-color: #1e1e22 !important;
+        --gdg-text-dark: #e4e4e7 !important;
+        --gdg-text-header: #a1a1aa !important;
+        --gdg-bg-cell-medium: #131316 !important;
+        --gdg-accent-color: #3f3f46 !important;
+        --gdg-accent-light: #27272a !important;
+    }}
 
     /* Streamlit metric override — hide default */
     div[data-testid="stMetric"] {{
