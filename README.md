@@ -1,8 +1,8 @@
 # Pakistan Medicine Price Tracker (MedTracker PK)
 
-
-
 A real-time medicine price monitoring dashboard that scrapes Pakistani pharmacy websites and compares prices against **DRAP (Drug Regulatory Authority of Pakistan)** registered rates to flag overpricing.
+
+**[Live Demo](https://medtracker-pk.streamlit.app)**
 
 ---
 
@@ -23,17 +23,45 @@ This project was built to:
 
 ## Features
 
--  **Multi-Source Scraping** — Fetches prices from [Dawaai.pk](https://dawaai.pk) and [MedStore.com.pk](https://medstore.com.pk)
--  **DRAP Comparison** — Flags medicines priced >10% above official DRAP rates
--  **Anomaly Detection** — Uses scikit-learn IsolationForest to flag unusual price spikes
--  **Price Trends** — Tracks price changes over time with interactive line charts
--  **Visual Analytics** — Bar charts (top overpriced), pie charts (fair vs overpriced)
--  **Search & Filter** — Find any medicine instantly, filter by overpriced status or source
--  **CSV/Report Export** — Download filtered data as CSV or a summary report
--  **Scheduled Scraping** — Automated price monitoring on a configurable interval
--  **On-Demand Scraping** — Trigger a fresh scrape from the sidebar
--  **Synthetic Fallback** — Always shows data, even if live scraping is blocked
--  **SQLite Storage** — Persistent local database for historical tracking
+### Medicine Lookup
+- Search any medicine to find cheaper alternatives with the same active ingredient
+- Best deal card with savings calculation
+- Price comparison bar charts across pharmacies
+- Direct links to Dawaai.pk and MedStore.com.pk
+
+### Prescription Cart
+- **AI Prescription Scanner** — Upload/photograph a prescription, Gemini AI extracts medicine names
+- Fuzzy matching to find medicines even with typos
+- Compare total prescription cost across pharmacies
+- Identifies cheapest source with savings breakdown
+
+### Cost Calculator
+- Project monthly/multi-month medicine costs
+- Automatic generic alternative suggestions with savings over time
+
+### Pharmacies
+- Interactive map of pharmacies across 6 major cities
+- Filter by city, view address and contact details
+- Online pharmacy links
+
+### Analytics
+- Overpricing analysis with top 10 overpriced medicines
+- Availability tracking across pharmacies
+- Price trend charts with DRAP reference lines
+- Anomaly detection (IsolationForest) for unusual price spikes
+- CSV and report export
+
+### Research Insights
+- **Medicine Accessibility Score** — per-city composite score (pharmacy density, price fairness, stock availability)
+- **Affordability Index** — medicine costs as % of city-level income
+- **City Affordability Heatmap** — essential medicines vs cities with income-adjusted burden
+- **Pharmacy Coverage Map** — density analysis with Low/Medium/High coverage labels
+- **Generic Penetration Analysis** — potential savings from switching to generics
+- **WHO Essential Medicine Coverage** — cross-reference against 50 WHO essential medicines
+- **Price & Overpricing Heatmaps** — visual price intensity and DRAP violation maps
+- **Anomaly Detection Dashboard** — Isolation Forest scatter plot with detailed anomaly table
+- **Stock-Out Tracker** — availability timeline heatmap for supply chain gap detection
+- **Price Trend Forecasting** — linear projection with confidence bands
 
 ---
 
@@ -45,8 +73,8 @@ This project was built to:
 | Scraping    | Requests, BeautifulSoup, lxml       |
 | Data        | Pandas, SQLite                      |
 | ML          | scikit-learn (IsolationForest)      |
+| AI/OCR      | Google Gemini API (prescription scanning) |
 | Scheduling  | schedule (automated scraping)       |
-| Testing     | pytest                              |
 
 ---
 
@@ -83,9 +111,19 @@ The app will open in your browser at `http://localhost:8501`.
 
 > **Note:** On the first run, the app will automatically generate synthetic data if the database is empty, so you can skip step 4 if you prefer.
 
-### Scheduled Scraping
+### Prescription Scanner Setup (Optional)
 
-To run the scraper on an automatic schedule:
+To enable AI-powered prescription scanning, add your Gemini API key:
+
+```bash
+# Create .streamlit/secrets.toml
+mkdir .streamlit
+echo 'GEMINI_API_KEY = "your-key-here"' > .streamlit/secrets.toml
+```
+
+Get a free key at [aistudio.google.com/apikey](https://aistudio.google.com/apikey).
+
+### Scheduled Scraping
 
 ```bash
 # Run every 6 hours (default)
@@ -95,11 +133,41 @@ python scraper/scrape.py --schedule
 python scraper/scrape.py --schedule --interval 2
 ```
 
-### Running Tests
+---
 
-```bash
-python -m pytest tests/ -v
+## Project Structure
+
 ```
+pakistan-medicine-tracker/
+├── app/
+│   ├── app.py                  # Main Streamlit dashboard
+│   └── research_insights.py    # Research Insights tab (10 features)
+├── scraper/
+│   └── scrape.py               # Web scraper + synthetic data generator
+├── data/
+│   ├── drap_prices.csv         # DRAP reference prices (183 medicines)
+│   ├── pharmacies.csv          # Pharmacy locations (24 across 6 cities)
+│   └── medicines.db            # SQLite database (auto-generated)
+├── tests/
+│   └── test_scanner.py         # Unit tests
+├── .streamlit/
+│   └── secrets.toml            # API keys (gitignored)
+├── requirements.txt
+├── runtime.txt                 # Python version for deployment
+└── README.md
+```
+
+---
+
+## Related Research
+
+This project is inspired by and extends research on healthcare accessibility in South Asia:
+
+**ICONIP 2024 Published Paper**
+*"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"*
+[Read the paper](https://link.springer.com/conference/iconip)
+
+The Research Insights tab directly implements the paper's framework — using web-scraped pharmaceutical data, anomaly detection (Isolation Forest), accessibility scoring, and affordability analysis to identify and quantify healthcare gaps in Pakistan's medicine supply chain.
 
 ---
 
@@ -120,38 +188,6 @@ Contributions are welcome! Here's how you can help:
 - Build a REST API layer for mobile apps
 - Add Urdu language support
 - Improve scraping resilience with Selenium/Playwright
-
----
-
-## Related Research
-
-This project is inspired by and contributes to ongoing research on healthcare accessibility in South Asia:
-
- **ICONIP 2024 Published Paper**
-*"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"*
-[Read the paper →](https://link.springer.com/conference/iconip)
-
-The paper explores systemic barriers to healthcare access across South Asian countries and proposes data-driven interventions — of which price transparency tools like this project are a practical implementation.
-
----
-
-## Project Structure
-
-```
-pakistan-medicine-tracker/
-├── scraper/
-│   └── scrape.py           # Web scraper (dawaai.pk + medstore.com.pk) + anomaly detection
-├── data/
-│   ├── drap_prices.csv     # DRAP reference prices (25 medicines)
-│   └── medicines.db        # SQLite database (auto-generated)
-├── app/
-│   └── app.py              # Streamlit dashboard with exports & anomaly markers
-├── tests/
-│   └── test_scraper.py     # Unit tests
-├── .gitignore
-├── requirements.txt        # Python dependencies
-└── README.md               # This file
-```
 
 ---
 
