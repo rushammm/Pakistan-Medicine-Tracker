@@ -9,6 +9,16 @@ import sys
 import sqlite3
 from datetime import datetime
 from urllib.parse import quote
+import re
+import csv
+from difflib import get_close_matches, SequenceMatcher
+
+try:
+    import pytesseract
+    from PIL import Image
+    HAS_TESSERACT = True
+except ImportError:
+    HAS_TESSERACT = False
 
 import pandas as pd
 import numpy as np
@@ -383,6 +393,34 @@ st.markdown(f"""
     div[data-testid="stModal"] [data-baseweb="popover"] li:hover {{
         background: {COLORS["surface2"]} !important;
     }}
+
+    /* Scanner card */
+    .scanner-card {{
+        background: {COLORS["surface"]};
+        border: 1px solid {COLORS["border"]};
+        border-radius: 12px;
+        padding: 1.25rem 1.5rem;
+        margin-top: 0.75rem;
+    }}
+    .scanner-match {{
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 0.5rem 0;
+        border-bottom: 1px solid {COLORS["border"]};
+    }}
+    .scanner-match:last-child {{
+        border-bottom: none;
+    }}
+    .scanner-match-name {{
+        color: #ffffff;
+        font-weight: 600;
+        font-size: 0.9rem;
+    }}
+    .scanner-match-detail {{
+        color: {COLORS["text_dim"]};
+        font-size: 0.8rem;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -465,6 +503,116 @@ def load_pharmacies() -> pd.DataFrame:
 def whatsapp_link(text: str) -> str:
     """Return a WhatsApp share URL for the given text."""
     return f"https://wa.me/?text={quote(text)}"
+
+
+# ---------------------------------------------------------------------------
+# Prescription scanner helpers
+# ---------------------------------------------------------------------------
+
+DRAP_CSV = os.path.join(BASE_DIR, "data", "drap_prices.csv")
+
+@st.cache_data
+def load_drap_lookup():
+    """Read drap_prices.csv and return all_names list + generic_map dict."""
+    all_names = []
+    generic_map: dict[str, list[str]] = {}
+    if not os.path.exists(DRAP_CSV):
+        return all_names, generic_map
+    with open(DRAP_CSV, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
+        for row in reader:
+            name = row["name"].strip()
+            generic = row.get("generic_name", "").strip()
+            all_names.append(name)
+            if generic:
+                generic_map.setdefault(generic.lower(), []).append(name)
+    return all_names, generic_map
+
+
+_RX_PREFIX = re.compile(
+    r"^\s*(?:Tab\.?|Cap\.?|Syp\.?|Inj\.?|Susp\.?|Cr\.?|Oint\.?)\s*",
+    re.IGNORECASE,
+)
+_RX_SUFFIX = re.compile(
+    r"\s+(?:\d+\s*x\s*\d+|BD|TDS|OD|QID|PRN|SOS|HS|for\s+\d+\s*days?|after\s+meal|before\s+meal|daily|weekly)\s*",
+    re.IGNORECASE,
+)
+
+def clean_prescription_line(line: str) -> str:
+    """Strip common Rx prefixes/suffixes from a prescription line."""
+    line = _RX_PREFIX.sub("", line)
+    line = _RX_SUFFIX.sub(" ", line)
+    return line.strip()
+
+
+def match_medicine(text: str, all_names: list[str], generic_map: dict[str, list[str]]) -> list[dict]:
+    """Three-tier matching: exact → fuzzy → generic. Returns list of match dicts."""
+    text_lower = text.lower().strip()
+    if not text_lower:
+        return []
+
+    results = []
+
+    # 1. Exact match (case-insensitive)
+    for name in all_names:
+        if name.lower() == text_lower:
+            results.append({"name": name, "match_type": "exact", "score": 1.0})
+            return results
+
+    # 2. Fuzzy match on full name
+    fuzzy = get_close_matches(text_lower, [n.lower() for n in all_names], n=3, cutoff=0.4)
+    name_lower_map = {n.lower(): n for n in all_names}
+    for match_lower in fuzzy:
+        original = name_lower_map[match_lower]
+        score = SequenceMatcher(None, text_lower, match_lower).ratio()
+        results.append({"name": original, "match_type": "fuzzy", "score": round(score, 2)})
+
+    # 3. Fuzzy match on first word of each medicine name (helps with OCR errors)
+    if not results:
+        first_words = {}
+        for name in all_names:
+            fw = name.split()[0].lower()
+            first_words.setdefault(fw, []).append(name)
+        text_first = text_lower.split()[0] if text_lower.split() else text_lower
+        fw_matches = get_close_matches(text_first, list(first_words.keys()), n=3, cutoff=0.4)
+        for fw in fw_matches:
+            score = SequenceMatcher(None, text_first, fw).ratio()
+            for name in first_words[fw]:
+                if not any(r["name"] == name for r in results):
+                    results.append({"name": name, "match_type": "fuzzy", "score": round(score * 0.9, 2)})
+
+    # 4. Generic name match
+    for generic_lower, brand_names in generic_map.items():
+        if generic_lower in text_lower or text_lower in generic_lower:
+            for bname in brand_names:
+                if not any(r["name"] == bname for r in results):
+                    results.append({"name": bname, "match_type": "generic", "score": 0.7})
+
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results
+
+
+def extract_medicines_from_text(
+    raw_text: str, all_names: list[str], generic_map: dict[str, list[str]]
+) -> list[dict]:
+    """Split text into lines, clean each, match each, deduplicate."""
+    lines = [l.strip() for l in raw_text.splitlines() if l.strip()]
+    seen = set()
+    results = []
+    for line in lines:
+        cleaned = clean_prescription_line(line)
+        if not cleaned:
+            continue
+        matches = match_medicine(cleaned, all_names, generic_map)
+        # Deduplicate across lines
+        unique_matches = []
+        for m in matches:
+            if m["name"] not in seen:
+                unique_matches.append(m)
+                seen.add(m["name"])
+        if unique_matches:
+            results.append({"line": line, "cleaned": cleaned, "matches": unique_matches})
+    return results
 
 
 # ---------------------------------------------------------------------------
@@ -659,6 +807,186 @@ def main():
     st.markdown('<hr class="divider">', unsafe_allow_html=True)
     st.markdown('<div class="section-title">Prescription Cart</div>', unsafe_allow_html=True)
     st.caption("Add all medicines from your prescription to compare total cost across pharmacies.")
+
+    # --- Prescription Scanner ---
+    drap_names, generic_map = load_drap_lookup()
+
+    with st.expander("Scan Prescription", expanded=False):
+        tab_upload, tab_paste = st.tabs(["Upload / Camera", "Type / Paste"])
+
+        with tab_upload:
+            uploaded_file = st.file_uploader(
+                "Upload prescription image",
+                type=["png", "jpg", "jpeg"],
+                key="_rx_upload",
+            )
+            camera_input = st.camera_input("Or take a photo", key="_rx_camera")
+
+            rx_image = uploaded_file or camera_input
+            if rx_image:
+                st.image(rx_image, caption="Prescription image", width=300)
+
+                # Check for Gemini API key
+                gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
+                if not gemini_key:
+                    gemini_key = st.text_input(
+                        "Gemini API Key",
+                        type="password",
+                        key="_gemini_key_input",
+                        help="Get a free key at https://aistudio.google.com/apikey",
+                    )
+
+                if gemini_key:
+                    import hashlib
+                    img_hash = hashlib.md5(rx_image.getvalue()).hexdigest()
+                    if st.session_state.get("_rx_img_hash") != img_hash:
+                        with st.spinner("Reading prescription with Gemini..."):
+                            try:
+                                import base64, requests as _req
+                                rx_image.seek(0)
+                                img_bytes = rx_image.getvalue()
+                                img_b64 = base64.b64encode(img_bytes).decode()
+                                prompt_text = (
+                                    "Read this prescription image. "
+                                    "Extract ONLY the medicine names, one per line. "
+                                    "Include dosage if visible (e.g. 500mg). "
+                                    "Do not add any other text, headers, or explanations."
+                                )
+                                payload = {
+                                    "contents": [{
+                                        "parts": [
+                                            {"text": prompt_text},
+                                            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+                                        ]
+                                    }]
+                                }
+
+                                ocr_result = None
+                                last_error = None
+                                for model_name in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]:
+                                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                                    resp = _req.post(url, json=payload, timeout=30)
+                                    if resp.status_code == 200:
+                                        data = resp.json()
+                                        ocr_result = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                                        break
+                                    else:
+                                        last_error = resp.text
+                                        continue
+
+                                if ocr_result:
+                                    st.session_state["_rx_ocr_text"] = ocr_result
+                                    st.session_state["_rx_img_hash"] = img_hash
+                                else:
+                                    raise Exception(f"All models failed. Last error: {last_error}")
+                            except Exception as e:
+                                err_msg = str(e)
+                                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                                    st.error("Gemini free tier quota exhausted. Please wait a few minutes or check your plan at https://ai.google.dev/gemini-api/docs/rate-limits")
+                                else:
+                                    st.error(f"Gemini API error: {err_msg}")
+
+                    ocr_text = st.session_state.get("_rx_ocr_text", "")
+                    if ocr_text:
+                        st.text_area(
+                            "Extracted medicines (edit if needed)",
+                            value=ocr_text,
+                            height=150,
+                            key="_rx_ocr_edit",
+                        )
+                else:
+                    st.caption(
+                        "Enter a [free Gemini API key](https://aistudio.google.com/apikey) "
+                        "above to auto-extract medicine names from the image."
+                    )
+
+        with tab_paste:
+            st.text_area(
+                "Enter medicine names (one per line)",
+                placeholder="Panadol 500mg\nDiane 35\nBrufen 400mg",
+                height=150,
+                key="_rx_paste",
+                help="Type medicine names as written on your prescription. "
+                     "Fuzzy matching will find the closest match even with typos.",
+            )
+
+        # Determine the text to use for matching
+        scan_text = (
+            st.session_state.get("_rx_ocr_edit", "").strip()
+            or st.session_state.get("_rx_ocr_text", "").strip()
+            or st.session_state.get("_rx_paste", "").strip()
+        )
+
+        if st.button("Find Medicines", key="_rx_find_btn"):
+            if scan_text:
+                matches = extract_medicines_from_text(scan_text, drap_names, generic_map)
+                st.session_state["scanner_matches"] = matches
+                if not matches:
+                    st.warning("No medicines could be matched. Try different text.")
+            else:
+                st.warning(
+                    "The text box is empty. Click inside the text area above, "
+                    "type the medicine names (one per line), then click **Find Medicines**."
+                )
+
+        # Display match results
+        scanner_matches = st.session_state.get("scanner_matches", [])
+        if scanner_matches:
+            selected_meds = {}
+            for i, entry in enumerate(scanner_matches):
+                top_match = entry["matches"][0]
+                default_checked = top_match["score"] >= 0.6
+                col_check, col_info = st.columns([0.05, 0.95])
+                with col_check:
+                    checked = st.checkbox(
+                        "sel",
+                        value=default_checked,
+                        key=f"_rx_sel_{i}",
+                        label_visibility="collapsed",
+                    )
+                with col_info:
+                    match_label = (
+                        f"**{top_match['name']}** — "
+                        f"_{top_match['match_type']}_ (score: {top_match['score']:.0%})"
+                    )
+                    st.markdown(
+                        f'<div class="scanner-match">'
+                        f'<span class="scanner-match-name">{top_match["name"]}</span>'
+                        f'<span class="scanner-match-detail">'
+                        f'{top_match["match_type"]} &middot; {top_match["score"]:.0%} '
+                        f'&middot; from: "{entry["line"]}"'
+                        f'</span></div>',
+                        unsafe_allow_html=True,
+                    )
+                    # Show alternatives in a popover if available
+                    if len(entry["matches"]) > 1:
+                        with st.popover("Alternatives"):
+                            for alt in entry["matches"][1:]:
+                                alt_checked = st.checkbox(
+                                    f"{alt['name']} ({alt['match_type']}, {alt['score']:.0%})",
+                                    value=False,
+                                    key=f"_rx_alt_{i}_{alt['name']}",
+                                )
+                                if alt_checked:
+                                    selected_meds[alt["name"]] = True
+                if checked:
+                    selected_meds[top_match["name"]] = True
+
+            meds_to_add = [m for m in selected_meds if m in all_medicines]
+            if meds_to_add:
+                if st.button(
+                    f"Add {len(meds_to_add)} medicine(s) to cart",
+                    key="_rx_add_btn",
+                    type="primary",
+                ):
+                    existing = st.session_state.get("prescription_cart", [])
+                    merged = list(dict.fromkeys(existing + meds_to_add))
+                    st.session_state["prescription_cart"] = merged
+                    st.session_state["scanner_matches"] = []
+                    st.rerun()
+            else:
+                st.info("No matched medicines found in the database. Try different text.")
+    # --- End Scanner ---
 
     cart_medicines = st.multiselect(
         "Add medicines to your prescription",
