@@ -802,12 +802,13 @@ def main():
     # =================================================================
     # TOP-LEVEL NAVIGATION TABS
     # =================================================================
-    tab_lookup, tab_rx, tab_calc, tab_pharm, tab_analytics = st.tabs([
+    tab_lookup, tab_rx, tab_calc, tab_pharm, tab_analytics, tab_research = st.tabs([
         "Medicine Lookup",
         "Prescription Cart",
         "Cost Calculator",
         "Pharmacies",
         "Analytics",
+        "Research Insights",
     ])
 
     # =================================================================
@@ -1638,6 +1639,13 @@ def main():
                 st.info("Select at least one medicine to see trends.")
         else:
             st.info("Not enough data points for trend analysis. Run the scraper multiple times to build history.")
+
+    # =================================================================
+    # 6. RESEARCH INSIGHTS
+    # =================================================================
+    with tab_research:
+        from app.research_insights import render_research_insights
+        render_research_insights(df, load_pharmacies(), COLORS, PLOTLY_LAYOUT)
 
     # --- Footer ---
     st.markdown(f"""
