@@ -526,17 +526,24 @@ st.markdown(f"""
     }}
 
     /* Multiselect tags — grey glass */
-    .stMultiSelect [data-baseweb="tag"] {{
+    .stMultiSelect [data-baseweb="tag"],
+    [data-baseweb="tag"] {{
         background: rgba(255,255,255,0.1) !important;
         border: 1px solid rgba(255,255,255,0.15) !important;
         border-radius: 6px !important;
         color: #e4e4e7 !important;
     }}
-    .stMultiSelect [data-baseweb="tag"] span {{
+    .stMultiSelect [data-baseweb="tag"] span,
+    [data-baseweb="tag"] span {{
         color: #e4e4e7 !important;
     }}
-    .stMultiSelect [data-baseweb="tag"] [role="presentation"] {{
+    .stMultiSelect [data-baseweb="tag"] [role="presentation"],
+    [data-baseweb="tag"] [role="presentation"] {{
         color: #a1a1aa !important;
+    }}
+    /* Force all tag text visible */
+    [data-baseweb="tag"] * {{
+        color: #e4e4e7 !important;
     }}
 </style>
 """, unsafe_allow_html=True)
