@@ -985,7 +985,9 @@ def main():
                     type=["png", "jpg", "jpeg"],
                     key="_rx_upload",
                 )
-                camera_input = st.camera_input("Or take a photo", key="_rx_camera")
+                camera_input = None
+                if st.checkbox("Use camera instead", key="_rx_use_camera"):
+                    camera_input = st.camera_input("Take a photo", key="_rx_camera")
 
                 rx_image = uploaded_file or camera_input
                 if rx_image:
