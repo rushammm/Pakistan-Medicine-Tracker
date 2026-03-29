@@ -4,8 +4,6 @@ A real-time medicine price monitoring dashboard that scrapes Pakistani pharmacy 
 
 **[Live Demo](https://medtracker-pk.streamlit.app)**
 
----
-
 ## Why This Exists
 
 Pakistan's pharmaceutical market serves over 230 million people, yet price transparency remains a critical challenge. Despite DRAP setting official Maximum Retail Prices (MRPs), many pharmacies — both online and offline — sell medicines above regulated prices. This disproportionately impacts low-income patients who already face barriers to healthcare access.
@@ -19,7 +17,6 @@ This project was built to:
 
 > Healthcare is a right, not a privilege. Price transparency is the first step toward affordability.
 
----
 
 ## Features
 
@@ -63,7 +60,6 @@ This project was built to:
 - **Stock-Out Tracker** — availability timeline heatmap for supply chain gap detection
 - **Price Trend Forecasting** — linear projection with confidence bands
 
----
 
 ## Tech Stack
 
@@ -76,7 +72,6 @@ This project was built to:
 | AI/OCR      | Google Gemini API (prescription scanning) |
 | Scheduling  | schedule (automated scraping)       |
 
----
 
 ## How to Run Locally
 
@@ -157,19 +152,16 @@ pakistan-medicine-tracker/
 └── README.md
 ```
 
----
-
 ## Related Research
 
 This project is inspired by and extends research on healthcare accessibility in South Asia:
 
 **ICONIP 2024 Published Paper**
 *"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"*
-[Read the paper](https://link.springer.com/conference/iconip)
+[Read the paper](https://arxiv.org/abs/2409.14194)
 
 The Research Insights tab directly implements the paper's framework — using web-scraped pharmaceutical data, anomaly detection (Isolation Forest), accessibility scoring, and affordability analysis to identify and quantify healthcare gaps in Pakistan's medicine supply chain.
 
----
 
 ## How to Contribute
 
@@ -189,13 +181,11 @@ Contributions are welcome! Here's how you can help:
 - Add Urdu language support
 - Improve scraping resilience with Selenium/Playwright
 
----
 
 ## License
 
 This project is licensed under the **MIT License** — see the [LICENSE](LICENSE) file for details.
 
----
 
 <p align="center">
   <strong>Built by Rusham Elahi</strong><br>
