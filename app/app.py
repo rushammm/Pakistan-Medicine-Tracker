@@ -33,7 +33,6 @@ from sklearn.ensemble import IsolationForest
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DB_PATH = os.path.join(BASE_DIR, "data", "medicines.db")
-PHARMACIES_CSV = os.path.join(BASE_DIR, "data", "pharmacies.csv")
 sys.path.insert(0, BASE_DIR)
 
 DAWAAI_SEARCH_URL = "https://dawaai.pk/search?q={query}"
@@ -628,7 +627,7 @@ def ensure_data():
 
     if needs_scrape:
         with st.spinner("Initializing data — this may take a moment on first run..."):
-            from scraper.scrape import run_scraper
+            from scraper.scrape_real import run_scraper
             run_scraper()
         st.cache_data.clear()
 
@@ -644,13 +643,6 @@ def detect_anomalies_df(df: pd.DataFrame) -> pd.DataFrame:
     preds = model.fit_predict(features)
     df["anomaly"] = (preds == -1).astype(int)
     return df
-
-
-@st.cache_data
-def load_pharmacies() -> pd.DataFrame:
-    if not os.path.exists(PHARMACIES_CSV):
-        return pd.DataFrame()
-    return pd.read_csv(PHARMACIES_CSV)
 
 
 def whatsapp_link(text: str) -> str:
@@ -772,17 +764,6 @@ def extract_medicines_from_text(
 # Location dialog
 # ---------------------------------------------------------------------------
 
-PHARMACY_CITIES = ["Karachi", "Lahore", "Islamabad", "Rawalpindi", "Peshawar", "Faisalabad"]
-
-@st.dialog("Where are you located?")
-def location_dialog():
-    st.markdown("Select your city so we can show you the **nearest pharmacies**.")
-    city = st.selectbox("Your city", options=PHARMACY_CITIES, key="loc_dialog_city")
-    if st.button("Confirm", type="primary", use_container_width=True):
-        st.session_state["user_city"] = city
-        st.rerun()
-
-
 # ---------------------------------------------------------------------------
 # Sidebar
 # ---------------------------------------------------------------------------
@@ -792,38 +773,35 @@ def render_sidebar(df: pd.DataFrame):
 
     if st.sidebar.button("Refresh Data", width="stretch"):
         with st.spinner("Scraping prices..."):
-            from scraper.scrape import run_scraper
+            from scraper.scrape_real import run_scraper
             run_scraper()
         st.cache_data.clear()
         st.rerun()
 
-    st.sidebar.markdown("")
-
-    pharmacies_df = load_pharmacies()
-    cities = ["All"] + sorted(pharmacies_df["city"].unique().tolist()) if not pharmacies_df.empty else ["All"]
-    user_city = st.session_state.get("user_city", "All")
-    default_idx = cities.index(user_city) if user_city in cities else 0
-    selected_city = st.sidebar.selectbox("Pharmacy City", cities, index=default_idx)
-
     st.sidebar.markdown("---")
     st.sidebar.caption("Built by [Rusham Elahi](https://github.com/rushammm)")
-
-    return selected_city
 
 
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
+def get_gemini_key():
+    """Get Gemini API key from secrets > env > user input."""
+    try:
+        return st.secrets["GEMINI_API_KEY"].strip()
+    except (KeyError, FileNotFoundError, AttributeError):
+        key = os.environ.get("GEMINI_API_KEY", "").strip()
+        if key:
+            return key
+    return ""
+
+
 def main():
     ensure_data()
     df = load_data()
 
-    # --- Location popup (first visit only) ---
-    if "user_city" not in st.session_state:
-        location_dialog()
-
-    # --- Hero (reworded) ---
+    # --- Hero ---
     st.markdown("""
     <div class="hero">
         <h1>MedTracker PK</h1>
@@ -839,20 +817,19 @@ def main():
     df = detect_anomalies_df(df)
     if "availability" not in df.columns:
         df["availability"] = "Unknown"
-    selected_city = render_sidebar(df)
+    render_sidebar(df)
 
     all_medicines = sorted(df["name"].unique().tolist())
 
     # =================================================================
     # TOP-LEVEL NAVIGATION TABS
     # =================================================================
-    tab_lookup, tab_rx, tab_calc, tab_pharm, tab_analytics, tab_research = st.tabs([
+    tab_rx, tab_lookup, tab_forecast, tab_counterfeit, tab_analytics = st.tabs([
+        "Prescription Scanner",
         "Medicine Lookup",
-        "Prescription Cart",
-        "Cost Calculator",
-        "Pharmacies",
+        "Supply Forecaster",
+        "Counterfeit Detector",
         "Analytics",
-        "Research Insights",
     ])
 
     # =================================================================
@@ -967,108 +944,117 @@ def main():
             else:
                 st.info("No generic name information available for this medicine.")
 
+            pass  # end of medicine lookup
+
     # =================================================================
     # 2. PRESCRIPTION CART
     # =================================================================
     with tab_rx:
-        st.caption("Add all medicines from your prescription to compare total cost across pharmacies.")
+        st.markdown("""
+        <div style="background:linear-gradient(135deg, rgba(34,197,94,0.06) 0%, rgba(245,158,11,0.04) 100%);
+                    backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:16px;padding:1.5rem 1.75rem;margin-bottom:1.5rem;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+                <div style="width:8px;height:8px;border-radius:50%;background:#22c55e;box-shadow:0 0 8px rgba(34,197,94,0.4);"></div>
+                <div style="font-size:0.65rem;text-transform:uppercase;letter-spacing:0.08em;color:#71717a;">AI-Powered</div>
+            </div>
+            <div style="font-size:1.2rem;font-weight:700;color:#fff;">Prescription Scanner</div>
+            <div style="font-size:0.8rem;color:#a1a1aa;margin-top:6px;line-height:1.5;">
+                Upload a prescription photo or type medicine names to instantly compare prices across pharmacies.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-        # --- Prescription Scanner ---
         drap_names, generic_map = load_drap_lookup()
 
-        with st.expander("Scan Prescription", expanded=False):
-            tab_upload, tab_paste = st.tabs(["Upload / Camera", "Type / Paste"])
+        tab_upload, tab_paste = st.tabs(["Upload / Camera", "Type / Paste"])
 
-            with tab_upload:
-                uploaded_file = st.file_uploader(
-                    "Upload prescription image",
-                    type=["png", "jpg", "jpeg"],
-                    key="_rx_upload",
-                )
-                camera_input = None
-                if st.checkbox("Use camera instead", key="_rx_use_camera"):
-                    camera_input = st.camera_input("Take a photo", key="_rx_camera")
+        with tab_upload:
+            uploaded_file = st.file_uploader(
+                "Upload prescription image",
+                type=["png", "jpg", "jpeg"],
+                key="_rx_upload",
+            )
+            camera_input = None
+            if st.checkbox("Use camera instead", key="_rx_use_camera"):
+                camera_input = st.camera_input("Take a photo", key="_rx_camera")
 
-                rx_image = uploaded_file or camera_input
-                if rx_image:
-                    st.image(rx_image, caption="Prescription image", width=300)
+            rx_image = uploaded_file or camera_input
+            if rx_image:
+                st.image(rx_image, caption="Prescription image", width=300)
 
-                    # Check for Gemini API key: secrets > env > user input
-                    try:
-                        gemini_key = st.secrets["GEMINI_API_KEY"].strip()
-                    except (KeyError, FileNotFoundError, AttributeError):
-                        gemini_key = os.environ.get("GEMINI_API_KEY", "").strip()
-                    if not gemini_key:
-                        gemini_key = st.text_input(
-                            "Gemini API Key",
-                            type="password",
-                            key="_gemini_key_input",
-                            help="Get a free key at https://aistudio.google.com/apikey",
-                        )
+                gemini_key = get_gemini_key()
+                if not gemini_key:
+                    gemini_key = st.text_input(
+                        "Gemini API Key",
+                        type="password",
+                        key="_gemini_key_input",
+                        help="Get a free key at https://aistudio.google.com/apikey",
+                    )
 
-                    if gemini_key:
-                        import hashlib
-                        img_hash = hashlib.md5(rx_image.getvalue()).hexdigest()
-                        if st.session_state.get("_rx_img_hash") != img_hash:
-                            with st.spinner("Reading prescription with Gemini..."):
-                                try:
-                                    import base64, requests as _req
-                                    rx_image.seek(0)
-                                    img_bytes = rx_image.getvalue()
-                                    img_b64 = base64.b64encode(img_bytes).decode()
-                                    prompt_text = (
-                                        "Read this prescription image. "
-                                        "Extract ONLY the medicine names, one per line. "
-                                        "Include dosage if visible (e.g. 500mg). "
-                                        "Do not add any other text, headers, or explanations."
-                                    )
-                                    payload = {
-                                        "contents": [{
-                                            "parts": [
-                                                {"text": prompt_text},
-                                                {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
-                                            ]
-                                        }]
-                                    }
+                if gemini_key:
+                    import hashlib
+                    img_hash = hashlib.md5(rx_image.getvalue()).hexdigest()
+                    if st.session_state.get("_rx_img_hash") != img_hash:
+                        with st.spinner("Reading prescription with Gemini..."):
+                            try:
+                                import base64, requests as _req
+                                rx_image.seek(0)
+                                img_bytes = rx_image.getvalue()
+                                img_b64 = base64.b64encode(img_bytes).decode()
+                                prompt_text = (
+                                    "Read this prescription image. "
+                                    "Extract ONLY the medicine names, one per line. "
+                                    "Include dosage if visible (e.g. 500mg). "
+                                    "Do not add any other text, headers, or explanations."
+                                )
+                                payload = {
+                                    "contents": [{
+                                        "parts": [
+                                            {"text": prompt_text},
+                                            {"inline_data": {"mime_type": "image/jpeg", "data": img_b64}},
+                                        ]
+                                    }]
+                                }
 
-                                    ocr_result = None
-                                    last_error = None
-                                    for model_name in ["gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-2.5-flash"]:
-                                        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
-                                        resp = _req.post(url, json=payload, timeout=30)
-                                        if resp.status_code == 200:
-                                            data = resp.json()
-                                            ocr_result = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-                                            break
-                                        else:
-                                            last_error = resp.text
-                                            continue
-
-                                    if ocr_result:
-                                        st.session_state["_rx_ocr_text"] = ocr_result
-                                        st.session_state["_rx_img_hash"] = img_hash
+                                ocr_result = None
+                                last_error = None
+                                for model_name in ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-2.0-flash-lite"]:
+                                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={gemini_key}"
+                                    resp = _req.post(url, json=payload, timeout=30)
+                                    if resp.status_code == 200:
+                                        data = resp.json()
+                                        ocr_result = data["candidates"][0]["content"]["parts"][0]["text"].strip()
+                                        break
                                     else:
-                                        raise Exception(f"All models failed. Last error: {last_error}")
-                                except Exception as e:
-                                    err_msg = str(e)
-                                    if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
-                                        st.error("Gemini free tier quota exhausted. Please wait a few minutes or check your plan at https://ai.google.dev/gemini-api/docs/rate-limits")
-                                    else:
-                                        st.error(f"Gemini API error: {err_msg}")
+                                        last_error = resp.text
+                                        continue
 
-                        ocr_text = st.session_state.get("_rx_ocr_text", "")
-                        if ocr_text:
-                            st.text_area(
-                                "Extracted medicines (edit if needed)",
-                                value=ocr_text,
-                                height=150,
-                                key="_rx_ocr_edit",
-                            )
-                    else:
-                        st.caption(
-                            "Enter a [free Gemini API key](https://aistudio.google.com/apikey) "
-                            "above to auto-extract medicine names from the image."
+                                if ocr_result:
+                                    st.session_state["_rx_ocr_text"] = ocr_result
+                                    st.session_state["_rx_img_hash"] = img_hash
+                                else:
+                                    raise Exception(f"All models failed. Last error: {last_error}")
+                            except Exception as e:
+                                err_msg = str(e)
+                                if "429" in err_msg or "RESOURCE_EXHAUSTED" in err_msg or "quota" in err_msg.lower():
+                                    st.error("Gemini free tier quota exhausted. Please wait a few minutes or check your plan at https://ai.google.dev/gemini-api/docs/rate-limits")
+                                else:
+                                    st.error(f"Gemini API error: {err_msg}")
+
+                    ocr_text = st.session_state.get("_rx_ocr_text", "")
+                    if ocr_text:
+                        st.text_area(
+                            "Extracted medicines (edit if needed)",
+                            value=ocr_text,
+                            height=150,
+                            key="_rx_ocr_edit",
                         )
+                else:
+                    st.caption(
+                        "Enter a [free Gemini API key](https://aistudio.google.com/apikey) "
+                        "above to auto-extract medicine names from the image."
+                    )
 
             with tab_paste:
                 st.text_area(
@@ -1213,152 +1199,18 @@ def main():
             st.info("Select medicines above to see total prescription cost across pharmacies.")
 
     # =================================================================
-    # 3. MONTHLY COST CALCULATOR
+    # 3. SUPPLY FORECASTER
     # =================================================================
-    with tab_calc:
-        st.caption("For patients who buy the same medicines regularly — see projected costs and generic savings.")
-
-        calc_col1, calc_col2, calc_col3 = st.columns([3, 1, 1])
-        with calc_col1:
-            calc_med = st.selectbox("Medicine", options=all_medicines, key="cost_calc_med")
-        with calc_col2:
-            qty_per_month = st.number_input("Qty / month", min_value=1, max_value=100, value=1, key="cost_calc_qty")
-        with calc_col3:
-            num_months = st.number_input("Months", min_value=1, max_value=24, value=6, key="cost_calc_months")
-
-        if calc_med:
-            calc_data = df[df["name"] == calc_med].sort_values("scraped_at").drop_duplicates(
-                subset=["source"], keep="last"
-            )
-
-            if not calc_data.empty:
-                cheapest = calc_data.sort_values("price_pkr").iloc[0]
-                unit_price = cheapest["price_pkr"]
-                total_cost = unit_price * qty_per_month * num_months
-                source_name = cheapest["source"]
-                generic = cheapest.get("generic_name", "")
-
-                generic_saving_html = ""
-                if generic:
-                    all_generic = df[
-                        df["generic_name"].str.lower() == generic.lower()
-                    ].sort_values("scraped_at").drop_duplicates(subset=["name", "source"], keep="last")
-                    cheapest_generic = all_generic.sort_values("price_pkr").iloc[0]
-
-                    if cheapest_generic["name"] != calc_med and cheapest_generic["price_pkr"] < unit_price:
-                        alt_total = cheapest_generic["price_pkr"] * qty_per_month * num_months
-                        saved = total_cost - alt_total
-                        generic_saving_html = f"""
-                        <div style="margin-top:0.75rem; padding:0.75rem 1rem; background:{COLORS['green_dim']}; border:1px solid rgba(255,255,255,0.1); border-radius:8px;">
-                            <span style="color:{COLORS['green']}; font-weight:600;">Generic alternative:</span>
-                            <span style="color:{COLORS['text']};">
-                                Switch to <strong>{cheapest_generic['name']}</strong> (same {generic}) —
-                                Rs {cheapest_generic['price_pkr']:.0f}/unit from {cheapest_generic['source']}
-                                &nbsp;|&nbsp; <strong style="color:{COLORS['green']};">Save Rs {saved:,.0f}</strong> over {num_months} months
-                            </span>
-                        </div>
-                        """
-
-                st.markdown(f"""
-                <div class="deal-card">
-                    <div class="deal-title">Projected Cost</div>
-                    <div class="deal-medicine">Rs {total_cost:,.0f}</div>
-                    <div class="deal-detail">
-                        {calc_med} — Rs {unit_price:.0f}/unit x {qty_per_month}/month x {num_months} months
-                        &nbsp;|&nbsp; Best at <strong>{source_name}</strong>
-                    </div>
-                    {generic_saving_html}
-                </div>
-                """, unsafe_allow_html=True)
-
-                wa_cost_text = (
-                    f"Monthly medicine cost: {calc_med}\n"
-                    f"Rs {unit_price:.0f}/unit x {qty_per_month}/mo x {num_months} mo = Rs {total_cost:,.0f}\n"
-                    f"Best price at {source_name}\n"
-                    f"Tracked on MedTracker PK"
-                )
-                st.markdown(
-                    f'<a class="wa-btn" href="{whatsapp_link(wa_cost_text)}" target="_blank">Share cost breakdown on WhatsApp</a>',
-                    unsafe_allow_html=True,
-                )
+    with tab_forecast:
+        from app.supply_forecaster import render_supply_forecaster_tab
+        render_supply_forecaster_tab(df, COLORS, PLOTLY_LAYOUT)
 
     # =================================================================
-    # 4. PHARMACIES NEAR YOU
+    # 4. COUNTERFEIT DETECTOR
     # =================================================================
-    with tab_pharm:
-        user_city = st.session_state.get("user_city", None)
-        if user_city:
-            st.caption(f"Showing pharmacies near {user_city}")
-        else:
-            st.caption("Find pharmacies near you across Pakistan.")
-
-        pharmacies_df = load_pharmacies()
-        if not pharmacies_df.empty:
-            phy_df = pharmacies_df.copy()
-            if selected_city != "All":
-                phy_df = phy_df[phy_df["city"] == selected_city]
-
-            # Map first for visual impact
-            if selected_city != "All":
-                center_lat = phy_df["latitude"].mean()
-                center_lon = phy_df["longitude"].mean()
-                zoom = 11
-            else:
-                center_lat = 30.3753
-                center_lon = 69.3451
-                zoom = 5
-
-            fig_map = px.scatter_mapbox(
-                phy_df,
-                lat="latitude",
-                lon="longitude",
-                hover_name="name",
-                hover_data={"address": True, "city": True, "phone": True, "latitude": False, "longitude": False},
-                color_discrete_sequence=[COLORS["green"]],
-                zoom=zoom,
-                center={"lat": center_lat, "lon": center_lon},
-                height=450,
-            )
-            fig_map.update_layout(
-                mapbox_style="open-street-map",
-                margin=dict(l=0, r=0, t=0, b=0),
-            )
-            st.plotly_chart(fig_map, width="stretch")
-
-            phy_display = phy_df[["name", "address", "city", "phone"]].copy()
-            phy_display.columns = ["Pharmacy", "Address", "City", "Phone"]
-            st.dataframe(phy_display, width="stretch", hide_index=True)
-
-            # Online links
-            search_term = selected_medicine if selected_medicine else ""
-            if search_term:
-                dawaai_url = DAWAAI_SEARCH_URL.format(query=search_term.replace(" ", "+"))
-                medstore_url = MEDSTORE_SEARCH_URL.format(query=search_term.replace(" ", "+"))
-                st.caption(
-                    f'Also available online: '
-                    f'<a href="{dawaai_url}" target="_blank">Dawaai.pk</a> | '
-                    f'<a href="{medstore_url}" target="_blank">MedStore.com.pk</a>',
-                    unsafe_allow_html=True,
-                )
-            else:
-                st.caption(
-                    'Also available online: '
-                    '<a href="https://dawaai.pk" target="_blank">Dawaai.pk</a> | '
-                    '<a href="https://medstore.com.pk" target="_blank">MedStore.com.pk</a>',
-                    unsafe_allow_html=True,
-                )
-
-            # WhatsApp share
-            phy_lines = [f"Pharmacies in {selected_city if selected_city != 'All' else 'Pakistan'}:"]
-            for _, p in phy_df.head(5).iterrows():
-                phy_lines.append(f"  {p['name']} — {p['address']}, {p['city']} ({p['phone']})")
-            phy_lines.append("Found on MedTracker PK")
-            st.markdown(
-                f'<a class="wa-btn" href="{whatsapp_link(chr(10).join(phy_lines))}" target="_blank">Share pharmacy list on WhatsApp</a>',
-                unsafe_allow_html=True,
-            )
-        else:
-            st.info("Pharmacy location data not available.")
+    with tab_counterfeit:
+        from app.counterfeit_detector import render_counterfeit_detector_tab
+        render_counterfeit_detector_tab(COLORS)
 
     # =================================================================
     # 5. ANALYTICS
@@ -1680,13 +1532,6 @@ def main():
                 st.info("Select at least one medicine to see trends.")
         else:
             st.info("Not enough data points for trend analysis. Run the scraper multiple times to build history.")
-
-    # =================================================================
-    # 6. RESEARCH INSIGHTS
-    # =================================================================
-    with tab_research:
-        from app.research_insights import render_research_insights
-        render_research_insights(df, load_pharmacies(), COLORS, PLOTLY_LAYOUT)
 
     # --- Footer ---
     st.markdown(f"""
