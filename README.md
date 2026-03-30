@@ -10,7 +10,7 @@ Real-time pharmaceutical intelligence platform for Pakistan. Scrapes medicine pr
 
 **Supply Shortage Forecaster** — Random Forest classifier (8 features, AUC ~0.73) predicts stock-out probability for each medicine. Gradient Boosting regressor predicts price direction. Combined into human-readable timelines: *"This medicine will be short within 2-4 weeks."*
 
-**Counterfeit Packaging Detector** — Upload a photo of medicine packaging. Gemini Vision inspects 8 authenticity markers (DRAP registration, batch codes, print quality, security features) and returns a structured risk assessment.
+**Counterfeit Packaging Detector** — Two-layer verification: Gemini Vision inspects 8 visual authenticity markers, then an ML pipeline cross-references the extracted medicine name and MRP against the DRAP database, runs Isolation Forest anomaly detection on the price, and compares against live market data.
 
 **Supply Gap Analysis** — Cross-references scraped availability data against WHO essential medicines to identify which drugs face persistent supply constraints in Pakistan's online pharmacy infrastructure.
 
