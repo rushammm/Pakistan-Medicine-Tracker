@@ -805,7 +805,7 @@ def main():
     st.markdown("""
     <div class="hero">
         <h1>MedTracker PK</h1>
-        <p>Find cheaper alternatives for your medicines</p>
+        <p>Pharmaceutical intelligence for Pakistan</p>
     </div>
     """, unsafe_allow_html=True)
 
