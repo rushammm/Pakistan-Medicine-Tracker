@@ -42,7 +42,7 @@ Models train on real data scraped from **dawaai.pk** and **dvago.pk**, compared 
 
 ## Research Connection
 
-Built as an implementation of the ICONIP 2024 paper: *"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"* ([arXiv:2409.14194](https://arxiv.org/abs/2409.14194)). The supply gap analysis directly extends the paper's framework by quantifying medicine availability gaps using real-time scraped data.
+Extends research published at ICONIP 2024: *"Healthcare Inaccessibility in South Asia: Challenges, Data-Driven Insights, and Pathways to Equitable Access"* ([arXiv:2409.14194](https://arxiv.org/abs/2409.14194)). The supply gap analysis applies the paper's accessibility framework to real-time scraped pharmaceutical data.
 
 <p align="center">
   <strong>Built by Rusham Elahi</strong>
