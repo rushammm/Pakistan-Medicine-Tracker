@@ -849,6 +849,55 @@ def main():
             selected_price = med_row["price_pkr"]
             generic = med_row.get("generic_name", "")
 
+            # --- ML Intelligence Card ---
+            try:
+                from app.ml_models import train_stockout_model, predict_stockout, train_price_model, predict_prices
+                so_model, so_le, _ = train_stockout_model(df)
+                p_model, p_le, _ = train_price_model(df)
+
+                risk = predict_stockout(so_model, so_le, df, selected_medicine) if so_model else None
+                price_preds = predict_prices(p_model, p_le, df) if p_model else pd.DataFrame()
+                med_price_pred = price_preds[price_preds["Medicine"] == selected_medicine] if not price_preds.empty else pd.DataFrame()
+
+                risk_color = {"High": "#ef4444", "Medium": "#f59e0b", "Low": "#22c55e"}.get(risk["risk_level"], "#71717a") if risk else "#71717a"
+                risk_label = risk["risk_level"] if risk else "N/A"
+                risk_score = risk["risk_score"] if risk else 0
+
+                price_change = med_price_pred["Change (%)"].iloc[0] if not med_price_pred.empty else 0
+                price_arrow = "&#9650;" if price_change > 1 else ("&#9660;" if price_change < -1 else "&#9644;")
+                price_color = "#ef4444" if price_change > 1 else ("#22c55e" if price_change < -1 else "#a1a1aa")
+
+                avail = med_row.get("availability", "Unknown")
+                avail_color = {"In Stock": "#22c55e", "Limited": "#f59e0b", "Out of Stock": "#ef4444"}.get(avail, "#71717a")
+
+                st.markdown(f"""
+                <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+                            border-radius:12px;padding:0.85rem 1.25rem;margin-bottom:1rem;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem;">
+                        <div>
+                            <div style="font-size:1.1rem;font-weight:700;color:#fff;">{selected_medicine}</div>
+                            <div style="font-size:0.8rem;color:#a1a1aa;">Rs {selected_price:,.0f}
+                                <span style="color:{avail_color};margin-left:8px;font-size:0.75rem;">&#9679; {avail}</span>
+                            </div>
+                        </div>
+                        <div style="display:flex;gap:1.25rem;">
+                            <div style="text-align:center;">
+                                <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;color:#52525b;">Stock-Out Risk</div>
+                                <div style="font-size:0.95rem;font-weight:700;color:{risk_color};">{risk_label}</div>
+                                <div style="font-size:0.6rem;color:#52525b;">RF {risk_score:.0%}</div>
+                            </div>
+                            <div style="text-align:center;">
+                                <div style="font-size:0.6rem;text-transform:uppercase;letter-spacing:0.05em;color:#52525b;">Price Trend</div>
+                                <div style="font-size:0.95rem;font-weight:700;color:{price_color};">{price_arrow} {price_change:+.1f}%</div>
+                                <div style="font-size:0.6rem;color:#52525b;">GB predicted</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            except Exception:
+                pass
+
             if generic:
                 st.markdown(
                     f'Active ingredient: <span class="pill pill-green">{generic}</span>',
@@ -1183,6 +1232,40 @@ def main():
                 cart_detail = cart_data[["name", "price_pkr", "availability", "source"]].copy()
                 cart_detail.columns = ["Medicine", "Price (PKR)", "Availability", "Source"]
                 st.dataframe(cart_detail, width="stretch", hide_index=True)
+
+                # --- ML: Flag at-risk medicines in cart ---
+                try:
+                    from app.ml_models import train_stockout_model, predict_stockout
+                    so_model, so_le, _ = train_stockout_model(df)
+                    if so_model:
+                        at_risk = []
+                        for med in cart_medicines:
+                            pred = predict_stockout(so_model, so_le, df, med)
+                            if pred["risk_level"] in ("High", "Medium"):
+                                at_risk.append((med, pred["risk_level"], pred["risk_score"]))
+                        if at_risk:
+                            risk_html = ""
+                            for med_name, level, score in at_risk:
+                                rc = "#ef4444" if level == "High" else "#f59e0b"
+                                risk_html += (
+                                    f'<div style="display:flex;align-items:center;gap:8px;margin:4px 0;">'
+                                    f'<div style="width:6px;height:6px;border-radius:50%;background:{rc};"></div>'
+                                    f'<span style="color:#e4e4e7;font-size:0.8rem;"><strong>{med_name}</strong>'
+                                    f' — <span style="color:{rc};">{level} risk ({score:.0%})</span>'
+                                    f' of going out of stock</span></div>'
+                                )
+                            st.markdown(f"""
+                            <div style="background:rgba(239,68,68,0.06);border:1px solid rgba(239,68,68,0.15);
+                                        border-left:3px solid #ef4444;border-radius:10px;padding:0.85rem 1rem;margin-top:0.75rem;">
+                                <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:#ef4444;
+                                            margin-bottom:6px;font-weight:600;">Supply Risk Alert (RF Model)</div>
+                                {risk_html}
+                                <div style="font-size:0.7rem;color:#52525b;margin-top:6px;">
+                                    Consider stocking up or finding alternatives for flagged medicines.</div>
+                            </div>
+                            """, unsafe_allow_html=True)
+                except Exception:
+                    pass
 
                 cart_lines = [f"My Prescription Cost ({len(cart_medicines)} medicines):"]
                 for _, row in source_totals.iterrows():
@@ -1532,6 +1615,146 @@ def main():
                 st.info("Select at least one medicine to see trends.")
         else:
             st.info("Not enough data points for trend analysis. Run the scraper multiple times to build history.")
+
+        # =============================================================
+        # SUPPLY GAP ANALYSIS (Research Paper Connection)
+        # =============================================================
+        st.markdown('<div class="section-title" style="margin-top:1.5rem;">Supply Gap Analysis</div>', unsafe_allow_html=True)
+        st.caption("Which essential medicines face supply constraints? Connects to healthcare accessibility research (ICONIP 2024).")
+
+        # Essential medicines subset (WHO Model List common generics tracked in Pakistan)
+        essential_generics = [
+            "Paracetamol", "Ibuprofen", "Amoxicillin", "Azithromycin", "Ciprofloxacin",
+            "Metformin", "Amlodipine", "Omeprazole", "Losartan", "Atorvastatin",
+            "Cefixime", "Diclofenac", "Metronidazole", "Cetirizine", "Pantoprazole",
+            "Montelukast", "Clarithromycin", "Levofloxacin", "Dexamethasone", "Salbutamol",
+        ]
+
+        latest_all = df.sort_values("scraped_at").drop_duplicates(subset=["name", "source"], keep="last")
+
+        # Build supply gap table
+        gap_rows = []
+        for gen in essential_generics:
+            gen_meds = latest_all[latest_all["generic_name"].str.lower() == gen.lower()] if "generic_name" in latest_all.columns else pd.DataFrame()
+            if gen_meds.empty:
+                gap_rows.append({
+                    "Generic": gen, "Brands Tracked": 0, "Sources": 0,
+                    "In Stock": 0, "Limited/OOS": 0, "Availability": 0,
+                    "Avg Price": 0, "Status": "NOT TRACKED",
+                })
+                continue
+
+            in_stock = (gen_meds["availability"] == "In Stock").sum()
+            limited_oos = ((gen_meds["availability"] == "Limited") | (gen_meds["availability"] == "Out of Stock")).sum()
+            total = len(gen_meds)
+            avail_rate = in_stock / total if total > 0 else 0
+
+            # Historical availability from full dataset
+            hist = df[df["generic_name"].str.lower() == gen.lower()] if "generic_name" in df.columns else pd.DataFrame()
+            hist_oos_rate = (hist["availability"] == "Out of Stock").mean() if not hist.empty else 0
+
+            if avail_rate < 0.3:
+                status = "CRITICAL GAP"
+            elif avail_rate < 0.6:
+                status = "SUPPLY RISK"
+            elif hist_oos_rate > 0.2:
+                status = "INTERMITTENT"
+            else:
+                status = "ADEQUATE"
+
+            gap_rows.append({
+                "Generic": gen,
+                "Brands Tracked": gen_meds["name"].nunique(),
+                "Sources": gen_meds["source"].nunique(),
+                "In Stock": int(in_stock),
+                "Limited/OOS": int(limited_oos),
+                "Availability": avail_rate,
+                "Avg Price": gen_meds["price_pkr"].mean(),
+                "Status": status,
+            })
+
+        gap_df = pd.DataFrame(gap_rows)
+
+        if not gap_df.empty:
+            # Summary metrics
+            critical_gaps = len(gap_df[gap_df["Status"] == "CRITICAL GAP"])
+            supply_risks = len(gap_df[gap_df["Status"] == "SUPPLY RISK"])
+            not_tracked = len(gap_df[gap_df["Status"] == "NOT TRACKED"])
+            adequate = len(gap_df[gap_df["Status"] == "ADEQUATE"])
+
+            g1, g2, g3, g4 = st.columns(4)
+            g1.markdown(f"""
+            <div style="background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:0.85rem;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:800;color:#ef4444;">{critical_gaps}</div>
+                <div style="font-size:0.7rem;color:#ef4444;font-weight:600;">Critical Gaps</div>
+            </div>""", unsafe_allow_html=True)
+            g2.markdown(f"""
+            <div style="background:rgba(245,158,11,0.1);border:1px solid rgba(245,158,11,0.25);border-radius:12px;padding:0.85rem;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:800;color:#f59e0b;">{supply_risks}</div>
+                <div style="font-size:0.7rem;color:#f59e0b;font-weight:600;">Supply Risks</div>
+            </div>""", unsafe_allow_html=True)
+            g3.markdown(f"""
+            <div style="background:rgba(161,161,170,0.1);border:1px solid rgba(161,161,170,0.25);border-radius:12px;padding:0.85rem;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:800;color:#a1a1aa;">{not_tracked}</div>
+                <div style="font-size:0.7rem;color:#a1a1aa;font-weight:600;">Not Tracked</div>
+            </div>""", unsafe_allow_html=True)
+            g4.markdown(f"""
+            <div style="background:rgba(34,197,94,0.1);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:0.85rem;text-align:center;">
+                <div style="font-size:1.5rem;font-weight:800;color:#22c55e;">{adequate}</div>
+                <div style="font-size:0.7rem;color:#22c55e;font-weight:600;">Adequate Supply</div>
+            </div>""", unsafe_allow_html=True)
+
+            # Availability bar chart
+            tracked = gap_df[gap_df["Status"] != "NOT TRACKED"].copy()
+            if not tracked.empty:
+                tracked = tracked.sort_values("Availability")
+                status_colors = {
+                    "CRITICAL GAP": "#ef4444", "SUPPLY RISK": "#f59e0b",
+                    "INTERMITTENT": "#fb923c", "ADEQUATE": "#22c55e",
+                }
+                fig_gap = go.Figure()
+                fig_gap.add_trace(go.Bar(
+                    y=tracked["Generic"],
+                    x=tracked["Availability"],
+                    orientation="h",
+                    marker_color=[status_colors.get(s, "#3f3f46") for s in tracked["Status"]],
+                    text=tracked.apply(
+                        lambda r: f"{r['Availability']:.0%} — {r['Status']}",
+                        axis=1,
+                    ),
+                    textposition="outside",
+                    textfont=dict(color=COLORS["text"], size=10),
+                    hovertemplate="%{y}: %{x:.0%} availability<extra></extra>",
+                ))
+                fig_gap.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                    font=dict(family="Inter, sans-serif", color=COLORS["text"], size=11),
+                    margin=dict(l=10, r=120, t=10, b=10),
+                    height=max(300, len(tracked) * 28),
+                    xaxis=dict(gridcolor=COLORS["border"], title="Availability Rate",
+                               tickformat=".0%", range=[0, 1.25]),
+                    yaxis=dict(autorange="reversed", gridcolor=COLORS["border"]),
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_gap, use_container_width=True)
+
+            # Not-tracked essential medicines (research gap)
+            not_tracked_list = gap_df[gap_df["Status"] == "NOT TRACKED"]["Generic"].tolist()
+            if not_tracked_list:
+                st.markdown(f"""
+                <div style="background:rgba(161,161,170,0.06);border:1px solid rgba(161,161,170,0.15);
+                            border-left:3px solid #71717a;border-radius:10px;padding:0.85rem 1rem;margin-top:0.5rem;">
+                    <div style="font-size:0.7rem;text-transform:uppercase;letter-spacing:0.05em;color:#71717a;
+                                margin-bottom:6px;font-weight:600;">Research Gap — Not Tracked by Online Pharmacies</div>
+                    <div style="font-size:0.8rem;color:#a1a1aa;">
+                        {', '.join(not_tracked_list)}
+                    </div>
+                    <div style="font-size:0.7rem;color:#52525b;margin-top:6px;">
+                        These WHO essential medicines are not available on dawaai.pk or dvago.pk,
+                        indicating potential accessibility gaps in Pakistan's online pharmacy infrastructure.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
 
     # --- Footer ---
     st.markdown(f"""
