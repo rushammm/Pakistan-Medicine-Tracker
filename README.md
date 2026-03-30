@@ -2,7 +2,7 @@
 
 Real-time pharmaceutical intelligence platform for Pakistan. Scrapes medicine prices from online pharmacies, compares against DRAP-regulated rates, and uses ML models to predict supply shortages and detect pricing anomalies.
 
-**[Live Demo](https://medtracker-pk.streamlit.app)** | **[Research Paper (ICONIP 2024)](https://arxiv.org/abs/2409.14194)**
+**[Live Demo](https://medtracker-pk.streamlit.app)**
 
 ## What It Does
 
