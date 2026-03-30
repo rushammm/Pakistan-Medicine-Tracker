@@ -278,7 +278,12 @@ def train_anomaly_model(_df):
 
 @st.cache_data(ttl=300)
 def evaluate_stockout_model(_df):
-    """Get detailed evaluation metrics with train/test split."""
+    """Evaluate stock-out model using temporal train/test split.
+
+    Uses time-based split (first 75% of dates for training, last 25% for testing)
+    to avoid future data leaking into training — critical for time-series evaluation.
+    Generic stats are computed only on training data to prevent leakage.
+    """
     df = _df.copy()
     df["scraped_at"] = pd.to_datetime(df["scraped_at"])
     df = df.sort_values(["name", "source", "scraped_at"])
@@ -297,17 +302,35 @@ def evaluate_stockout_model(_df):
     labeled["prev_price"] = labeled.groupby(["name", "source"])["price_pkr"].shift(1)
     labeled["price_change_pct"] = ((labeled["price_pkr"] - labeled["prev_price"]) / labeled["prev_price"] * 100).fillna(0)
 
-    generic_stats = labeled.groupby("generic_name").agg(
+    # Temporal split: first 75% of dates → train, last 25% → test
+    # This prevents future data from leaking into training
+    dates_sorted = sorted(labeled["scraped_at"].unique())
+    cutoff_idx = int(len(dates_sorted) * 0.75)
+    cutoff_date = dates_sorted[cutoff_idx]
+
+    train_mask = labeled["scraped_at"] < cutoff_date
+    test_mask = labeled["scraped_at"] >= cutoff_date
+
+    train_data = labeled[train_mask].copy()
+    test_data = labeled[test_mask].copy()
+
+    if len(train_data) < 30 or len(test_data) < 10:
+        return None
+
+    # Compute generic stats ONLY on training data to prevent leakage
+    generic_stats = train_data.groupby("generic_name").agg(
         generic_avg_price=("price_pkr", "mean"), brand_count=("name", "nunique"),
     )
-    labeled = labeled.merge(generic_stats, on="generic_name", how="left")
+    train_data = train_data.merge(generic_stats, on="generic_name", how="left")
+    test_data = test_data.merge(generic_stats, on="generic_name", how="left")
 
     feature_cols = ["price_pkr", "drap_price_pkr", "overprice_pct", "avail_num",
                     "source_enc", "price_change_pct", "generic_avg_price", "brand_count"]
-    X = labeled[feature_cols].fillna(0)
-    y = labeled["target"]
 
-    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25, random_state=42, stratify=y)
+    X_train = train_data[feature_cols].fillna(0)
+    y_train = train_data["target"]
+    X_test = test_data[feature_cols].fillna(0)
+    y_test = test_data["target"]
 
     model = RandomForestClassifier(
         n_estimators=100, max_depth=6, min_samples_leaf=5,
@@ -333,4 +356,6 @@ def evaluate_stockout_model(_df):
         "test_size": len(X_test),
         "train_size": len(X_train),
         "feature_importances": dict(zip(feature_cols, model.feature_importances_)),
+        "split_method": "temporal",
+        "cutoff_date": str(cutoff_date),
     }

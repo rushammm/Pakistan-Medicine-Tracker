@@ -824,12 +824,13 @@ def main():
     # =================================================================
     # TOP-LEVEL NAVIGATION TABS
     # =================================================================
-    tab_rx, tab_lookup, tab_forecast, tab_counterfeit, tab_analytics = st.tabs([
+    tab_rx, tab_lookup, tab_forecast, tab_counterfeit, tab_analytics, tab_future = st.tabs([
         "Prescription Scanner",
         "Medicine Lookup",
-        "Supply Forecaster",
+        "Price & Availability ML",
         "Counterfeit Detector",
         "Analytics",
+        "Future Work",
     ])
 
     # =================================================================
@@ -1755,6 +1756,85 @@ def main():
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
+
+    # =================================================================
+    # 6. FUTURE WORK
+    # =================================================================
+    with tab_future:
+        st.markdown("""
+        <div style="background:linear-gradient(135deg, rgba(99,102,241,0.06) 0%, rgba(161,161,170,0.04) 100%);
+                    backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:16px;padding:1.5rem 1.75rem;margin-bottom:1.5rem;">
+            <div style="font-size:1.2rem;font-weight:700;color:#fff;">Future Work</div>
+            <div style="font-size:0.8rem;color:#a1a1aa;margin-top:6px;line-height:1.5;">
+                Realistic next steps scoped to what is buildable with public data and existing infrastructure.
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Card 1
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:12px;padding:1rem 1.25rem;margin-bottom:0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:0.95rem;font-weight:600;color:#e4e4e7;">30-Day Price Trend Forecasting</div>
+                <span style="font-size:0.65rem;padding:3px 10px;border-radius:5px;background:rgba(245,158,11,0.15);
+                             color:#f59e0b;font-weight:600;">NEEDS MORE DATA</span>
+            </div>
+            <div style="font-size:0.8rem;color:#a1a1aa;line-height:1.5;">
+                Prophet model is built and ready. Once the scraper has run daily for 30+ days,
+                price forecasting becomes statistically meaningful. Currently at ~9 data points per medicine.
+            </div>
+            <div style="font-size:0.7rem;color:#52525b;margin-top:6px;">
+                Timeline: 30 days of running <code>scraper/scrape_real.py</code> daily</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Card 2
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:12px;padding:1rem 1.25rem;margin-bottom:0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:0.95rem;font-weight:600;color:#e4e4e7;">Expand to 500+ Medicines</div>
+                <span style="font-size:0.65rem;padding:3px 10px;border-radius:5px;background:rgba(34,197,94,0.15);
+                             color:#22c55e;font-weight:600;">IN PROGRESS</span>
+            </div>
+            <div style="font-size:0.8rem;color:#a1a1aa;line-height:1.5;">
+                Currently tracking 181 medicines from DRAP's registry. The scraping pipeline supports
+                any medicine on dawaai.pk and dvago.pk — expanding coverage requires adding entries
+                to <code>drap_prices.csv</code> and re-running the scraper.
+            </div>
+            <div style="font-size:0.7rem;color:#52525b;margin-top:6px;">
+                Timeline: 1-2 days of data entry</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        # Card 3
+        st.markdown("""
+        <div style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);
+                    border-radius:12px;padding:1rem 1.25rem;margin-bottom:0.75rem;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-size:0.95rem;font-weight:600;color:#e4e4e7;">Automated Daily Scraping + Price Alerts</div>
+                <span style="font-size:0.65rem;padding:3px 10px;border-radius:5px;background:rgba(161,161,170,0.15);
+                             color:#a1a1aa;font-weight:600;">PLANNED</span>
+            </div>
+            <div style="font-size:0.8rem;color:#a1a1aa;line-height:1.5;">
+                Deploy scraper on GitHub Actions to run daily. Add email/SMS alerts when a medicine
+                crosses the DRAP overpriced threshold or when availability drops. No new ML needed —
+                infrastructure work on the existing pipeline.
+            </div>
+            <div style="font-size:0.7rem;color:#52525b;margin-top:6px;">
+                Timeline: 1 weekend &middot; Tech: GitHub Actions (free), SMTP</div>
+        </div>
+        """, unsafe_allow_html=True)
+
+        st.markdown("""
+        <div style="font-size:0.7rem;color:#52525b;margin-top:1rem;padding:0.75rem 1rem;
+                    border-top:1px solid rgba(255,255,255,0.06);">
+            Future work is scoped to what is realistically buildable as a solo developer with
+            access to public data. Features are not implemented on synthetic or proxy data.
+        </div>
+        """, unsafe_allow_html=True)
 
     # --- Footer ---
     st.markdown(f"""
